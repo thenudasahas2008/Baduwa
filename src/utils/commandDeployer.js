@@ -17,7 +17,13 @@ async function deployCommands(client) {
         commands.push(commandData);
     });
 
-    const rest = new REST({ version: '10' }).setToken(process.env.TOKEN);
+    const token = process.env.TOKEN || process.env.DISCORD_TOKEN;
+    if (!token) {
+        logger.warn('Cannot deploy application commands: No TOKEN or DISCORD_TOKEN provided in environment.');
+        return;
+    }
+
+    const rest = new REST({ version: '10' }).setToken(token);
 
     try {
         logger.info(`Refreshing ${commands.length} application (/) commands globally.`);
@@ -49,7 +55,8 @@ async function deployCommands(client) {
 }
 
 deployCommands.deployGuildCommands = async function(client, guildId) {
-    if (!process.env.TOKEN || !client?.user?.id || !guildId) return;
+    const token = process.env.TOKEN || process.env.DISCORD_TOKEN;
+    if (!token || !client?.user?.id || !guildId) return;
     try {
         const commands = [];
         const seenNames = new Set();
@@ -60,7 +67,7 @@ deployCommands.deployGuildCommands = async function(client, guildId) {
                 commands.push(commandData);
             }
         });
-        const rest = new REST({ version: '10' }).setToken(process.env.TOKEN);
+        const rest = new REST({ version: '10' }).setToken(token);
         await rest.put(Routes.applicationGuildCommands(client.user.id, guildId), { body: commands });
         logger.info(`Instantly deployed commands to joined guild ${guildId}`);
     } catch (err) {

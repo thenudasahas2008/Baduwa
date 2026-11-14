@@ -139,6 +139,50 @@ function formatChoiceName(prefix, title, subtitle = '', extra = '') {
     }
 }
 
+const NON_MUSIC_TERMS = [
+    'gastritis', 'constipation', 'cramp', 'cramps', 'infection', 'symptom', 'symptoms',
+    'disease', 'meaning', 'definition', 'recipe', 'treatment', 'diet', 'workout', 'pain',
+    'headache', 'medicine', 'tablet', 'vomiting', 'fever', 'cough', 'tutorial', 'how to'
+];
+
+/**
+ * Fetches real song suggestions (title, artist, duration) via iTunes Search API with a 750ms timeout.
+ *
+ * @param {string} query
+ * @returns {Promise<Array<Object>>}
+ */
+async function fetchMusicSuggestions(query) {
+    if (!query || query.length < 2) return [];
+    try {
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 750);
+        const url = `https://itunes.apple.com/search?term=${encodeURIComponent(query)}&media=music&entity=song&limit=10`;
+
+        const response = await fetch(url, {
+            signal: controller.signal,
+            headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)' },
+        });
+        clearTimeout(timeout);
+
+        if (!response.ok) return [];
+        const data = await response.json();
+        if (Array.isArray(data?.results)) {
+            return data.results.map(item => ({
+                info: {
+                    title: item.trackName || '',
+                    author: item.artistName || '',
+                    duration: item.trackTimeMillis || 0,
+                    artworkUrl: item.artworkUrl100 || null,
+                    isExternalMusic: true,
+                }
+            })).filter(t => t.info.title);
+        }
+    } catch (_) {
+        // Non-blocking fallback
+    }
+    return [];
+}
+
 /**
  * Fetches YouTube search suggestion strings via Google suggest API with a tight 800ms timeout.
  *
@@ -161,7 +205,13 @@ async function fetchSearchSuggestions(query) {
         if (!response.ok) return [];
         const data = await response.json();
         if (Array.isArray(data) && Array.isArray(data[1])) {
-            return data[1].map(s => (typeof s === 'string' ? s.trim() : '')).filter(Boolean);
+            return data[1]
+                .map(s => (typeof s === 'string' ? s.trim() : ''))
+                .filter(s => {
+                    if (!s) return false;
+                    const lower = s.toLowerCase();
+                    return !NON_MUSIC_TERMS.some(t => lower.includes(t));
+                });
         }
     } catch (_) {
         // Non-blocking fallback
@@ -342,10 +392,11 @@ async function getAutocompleteChoices(client, rawInput, user) {
 
             const searchOperation = Promise.all([
                 fetchLavalinkTracks(client, trimmed, user),
+                fetchMusicSuggestions(trimmed),
                 fetchSearchSuggestions(trimmed),
             ]);
 
-            const [lavalinkRes, suggestions] = await Promise.race([searchOperation, hardTimeoutPromise]);
+            const [lavalinkRes, musicTracks, suggestions] = await Promise.race([searchOperation, hardTimeoutPromise]);
 
             const choices = [];
             const seenValues = new Set();
@@ -380,7 +431,12 @@ async function getAutocompleteChoices(client, rawInput, user) {
             }
 
             // 2. Rank candidate tracks using relevance engine (penalizes unrequested remixes, slowed & reverb, covers)
-            const rawTracks = lavalinkRes?.tracks || [];
+            const lavalinkTracks = lavalinkRes?.tracks || [];
+            const rawTracks = [...lavalinkTracks];
+            if (rawTracks.length === 0 && Array.isArray(musicTracks) && musicTracks.length > 0) {
+                rawTracks.push(...musicTracks);
+            }
+
             let rankedTracks = [];
             if (rawTracks.length > 0) {
                 rankedTracks = rankTracks(rawTracks, trimmed);
@@ -415,12 +471,14 @@ async function getAutocompleteChoices(client, rawInput, user) {
                 // Formulate label: "🎵 Title — Artist (3:45)"
                 const label = formatChoiceName('🎵', title, author, duration);
 
-                // Formulate value: canonical URI (preferred) or stable token
+                // Formulate value: canonical URI (preferred) or song search string
                 let val;
                 if (uri && isUrl(uri) && uri.length <= 100) {
                     val = uri;
                 } else if (identifier && `https://www.youtube.com/watch?v=${identifier}`.length <= 100) {
                     val = `https://www.youtube.com/watch?v=${identifier}`;
+                } else if (title && author && `${title} - ${author}`.length <= 100) {
+                    val = `${title} - ${author}`;
                 } else {
                     val = storeAutocompleteToken(uri || `${title} ${author}`, { title, author, track });
                 }

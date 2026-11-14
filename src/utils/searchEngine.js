@@ -1301,7 +1301,8 @@ async function executeSearchMusic(player, trimmed, requestUser, options = {}) {
         }
 
         const { getSpotifyTrackMetadata, matchSpotifyTrackToYouTube } = require('./spotifyResolver');
-        const meta = await getSpotifyTrackMetadata(classification.id);
+        const targetTrackId = classification.isShortLink ? classification.canonicalUrl : classification.id;
+        const meta = await getSpotifyTrackMetadata(targetTrackId);
         if (!meta || !meta.title) {
             return {
                 loadType: 'error',
@@ -1451,6 +1452,26 @@ async function executeSearchMusic(player, trimmed, requestUser, options = {}) {
             for (const t of fallbackResult.tracks) addCandidate(t);
         }
 
+        // Check if node is rate limited on YouTube
+        const isRateLimited = isRateLimitError(primaryResult) || isRateLimitError(fallbackResult);
+        if (isRateLimited) {
+            logger.warn(`[SEARCH] Lavalink node rate-limited on YouTube text search for "${trimmed}". Marking node and migrating...`);
+            markPlayerNodeRateLimited(player, 'YouTube HTTP 429 Rate Limited (Text Search)');
+            if (player?.client?.lavalinkConnectionManager?.migratePlayerToHealthyNode) {
+                const migrated = await player.client.lavalinkConnectionManager.migratePlayerToHealthyNode(player, 'text-search-429-rate-limit').catch(() => false);
+                if (migrated) {
+                    try {
+                        const [retryYtm, retryYt] = await Promise.all([
+                            searchWithTimeout(player, { query: trimmed, source: 'ytmsearch' }, requestUser, 6000, options.signal).catch(() => null),
+                            searchWithTimeout(player, { query: trimmed, source: 'ytsearch' }, requestUser, 6000, options.signal).catch(() => null),
+                        ]);
+                        if (retryYtm?.tracks) for (const t of retryYtm.tracks) addCandidate(t);
+                        if (retryYt?.tracks) for (const t of retryYt.tracks) addCandidate(t);
+                    } catch (_) {}
+                }
+            }
+        }
+
         let ranked = combinedTracks.length > 0 ? rankTracks(combinedTracks, trimmed) : [];
 
         // If no candidates or low confidence match, initiate smart cascading fallbacks
@@ -1490,6 +1511,27 @@ async function executeSearchMusic(player, trimmed, requestUser, options = {}) {
                 searchWithTimeout(player, { query: trimmed, source: 'scsearch' }, requestUser, 5000, options.signal)
                     .catch(() => null)
             );
+
+            // Fallback 4: External song metadata lookup via iTunes to resolve title & artist
+            if (!combinedTracks.length && !features.isUrl) {
+                try {
+                    const itunesUrl = `https://itunes.apple.com/search?term=${encodeURIComponent(trimmed)}&media=music&entity=song&limit=3`;
+                    const itunesRes = await fetch(itunesUrl, { signal: AbortSignal.timeout(3000) });
+                    if (itunesRes.ok) {
+                        const itunesData = await itunesRes.json();
+                        if (Array.isArray(itunesData?.results) && itunesData.results.length > 0) {
+                            const firstSong = itunesData.results[0];
+                            const resolvedQuery = `${firstSong.trackName} ${firstSong.artistName}`.trim();
+                            fallbackPromises.push(
+                                searchWithTimeout(player, { query: resolvedQuery, source: 'ytmsearch' }, requestUser, 5000, options.signal)
+                                    .catch(() => null),
+                                searchWithTimeout(player, { query: resolvedQuery, source: 'ytsearch' }, requestUser, 5000, options.signal)
+                                    .catch(() => null)
+                            );
+                        }
+                    }
+                } catch (_) {}
+            }
 
             const fallbackResults = await Promise.all(fallbackPromises);
             for (const fbRes of fallbackResults) {

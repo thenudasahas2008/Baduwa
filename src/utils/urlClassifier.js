@@ -23,6 +23,8 @@ const YOUTUBE_HOSTS = new Set([
 const SPOTIFY_HOSTS = new Set([
     'open.spotify.com',
     'play.spotify.com',
+    'spotify.link',
+    'spotify.app.link',
 ]);
 
 /**
@@ -259,6 +261,19 @@ function classifyInput(rawInput) {
 
     // 4. Spotify parsing
     if (SPOTIFY_HOSTS.has(hostname)) {
+        // Short links (e.g. spotify.link/xyz or spotify.app.link/xyz)
+        if (hostname === 'spotify.link' || hostname === 'spotify.app.link') {
+            const shortId = parsed.pathname.replace(/^\/+/, '').split('/')[0];
+            return {
+                type: SUPPORTED_TYPES.SPOTIFY_TRACK,
+                id: shortId || 'short',
+                canonicalUrl: originalQuery,
+                originalQuery,
+                isUrl: true,
+                isShortLink: true,
+            };
+        }
+
         // Strip localization path prefix like /intl-es/ or /intl-en/
         let normalizedPath = parsed.pathname.replace(/^\/intl-[a-z]{2,5}\//i, '/');
 

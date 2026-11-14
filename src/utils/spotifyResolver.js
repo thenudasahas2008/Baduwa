@@ -69,12 +69,36 @@ async function getSpotifyApiToken() {
 }
 
 /**
+ * Unshortens mobile share links (e.g. spotify.link/xyz) to canonical track IDs
+ * @param {string} urlOrId
+ * @returns {Promise<string>}
+ */
+async function unshortenSpotifyUrl(urlOrId) {
+    if (!urlOrId) return urlOrId;
+    if (/^https?:\/\/(?:spotify\.link|spotify\.app\.link)/i.test(urlOrId)) {
+        try {
+            const res = await fetch(urlOrId, {
+                method: 'GET',
+                redirect: 'follow',
+                headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)' },
+                signal: AbortSignal.timeout(4000),
+            });
+            const finalUrl = res.url || '';
+            const match = finalUrl.match(/\/track\/([a-zA-Z0-9]+)/i);
+            if (match) return match[1];
+        } catch (_) {}
+    }
+    return urlOrId;
+}
+
+/**
  * Fetches track metadata via Spotify Web API or public oEmbed / Embed fallback
- * @param {string} trackId
+ * @param {string} rawTrackId
  * @returns {Promise<{ title: string, artists: string, durationMs: number, thumbnail: string|null }|null>}
  */
-async function getSpotifyTrackMetadata(trackId) {
-    if (!trackId) return null;
+async function getSpotifyTrackMetadata(rawTrackId) {
+    if (!rawTrackId) return null;
+    const trackId = await unshortenSpotifyUrl(rawTrackId);
 
     const cached = spotifyMetadataCache.get(trackId);
     if (cached && Date.now() < cached.expiresAt) {
@@ -512,6 +536,7 @@ async function resolveTracksBounded(player, items, requestUser, concurrencyLimit
 }
 
 module.exports = {
+    unshortenSpotifyUrl,
     getSpotifyTrackMetadata,
     getSpotifyAlbumTracks,
     getSpotifyPlaylistTracks,

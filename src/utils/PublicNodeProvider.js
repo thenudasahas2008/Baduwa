@@ -266,6 +266,9 @@ class PublicNodeProvider {
                     return this.nodes.length > 0;
                 }
 
+                const secureNodes = allV4Nodes.filter(node => node.secure === true);
+                const insecureNodes = allV4Nodes.filter(node => node.secure !== true);
+
                 // Prioritize known high-performance low-latency secure nodes first
                 const preferredSecure = [];
                 const otherSecure = [];

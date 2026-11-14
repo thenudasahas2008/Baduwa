@@ -294,6 +294,67 @@ class TwentyFourSevenManager {
             }
         }
     }
+
+    /**
+     * Starts a background watchdog interval that checks whether 24/7 enabled bots
+     * are still connected to their designated voice channels, auto-reconnecting if disconnected.
+     *
+     * @param {Object} client - Discord client
+     * @param {number} [intervalMs=25000] - Interval between checks (default: 25 seconds)
+     */
+    startWatchdog(client, intervalMs = 25000) {
+        if (this.watchdogTimer) {
+            clearInterval(this.watchdogTimer);
+        }
+
+        this.watchdogTimer = setInterval(async () => {
+            if (!client?.guildSettings || !client?.is247Enabled) return;
+            const entries = client.guildSettings.cache?.entries
+                ? Array.from(client.guildSettings.cache.entries())
+                : [];
+
+            for (const [guildId, settings] of entries) {
+                if (!settings?.twentyFourSeven) continue;
+                const voiceChannelId = settings.voiceChannelId;
+                if (!voiceChannelId) continue;
+
+                // If currently actively reconnecting via backoff, skip this tick
+                if (this.isReconnecting(guildId)) continue;
+
+                try {
+                    const guild = client.guilds?.cache?.get(guildId)
+                        || (typeof client.guilds?.fetch === 'function' ? await client.guilds.fetch(guildId).catch(() => null) : null);
+                    if (!guild) continue;
+
+                    const botMember = guild.members?.me
+                        || (typeof guild.members?.fetch === 'function' ? await guild.members.fetch(client.user?.id).catch(() => null) : null);
+
+                    const isConnected = botMember?.voice?.channelId === voiceChannelId;
+                    if (!isConnected) {
+                        logger.info(`[247-WATCHDOG] Bot disconnected from 24/7 channel #${voiceChannelId} in guild ${guild.name || guildId}. Auto-rejoining...`);
+                        this.sessions.delete(guildId);
+                        this.scheduleAutoRecovery(client, guildId, voiceChannelId, 'watchdog_disconnect_detected');
+                    }
+                } catch (checkErr) {
+                    logger.debug(`[247-WATCHDOG] Check error for guild ${guildId}:`, checkErr?.message || checkErr);
+                }
+            }
+        }, intervalMs);
+
+        if (typeof this.watchdogTimer.unref === 'function') {
+            this.watchdogTimer.unref();
+        }
+    }
+
+    /**
+     * Stops the background 24/7 watchdog.
+     */
+    stopWatchdog() {
+        if (this.watchdogTimer) {
+            clearInterval(this.watchdogTimer);
+            this.watchdogTimer = null;
+        }
+    }
 }
 
 module.exports = new TwentyFourSevenManager();

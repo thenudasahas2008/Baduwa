@@ -742,6 +742,23 @@ const keepAliveServer = http.createServer((req, res) => {
 });
 keepAliveServer.listen(port, () => {
     logger.info(`[http] Keep-alive server listening on port ${port}`);
+
+    // Self-ping keepalive mechanism for Render Free Tier (prevents 15-minute idle spindown)
+    const externalUrl = process.env.RENDER_EXTERNAL_URL;
+    if (externalUrl) {
+        logger.info(`[http] Render external URL detected: ${externalUrl}. Starting self-ping keep-alive (every 7 minutes)...`);
+        const pingInterval = setInterval(() => {
+            const clientModule = externalUrl.startsWith('https') ? require('node:https') : require('node:http');
+            clientModule.get(externalUrl, (resp) => {
+                logger.debug(`[http] Self-ping successful: HTTP ${resp.statusCode}`);
+            }).on('error', (err) => {
+                logger.debug('[http] Self-ping ping error:', err?.message || err);
+            });
+        }, 7 * 60 * 1000);
+        if (typeof pingInterval.unref === 'function') {
+            pingInterval.unref();
+        }
+    }
 });
 
 async function bootstrap() {

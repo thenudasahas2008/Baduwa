@@ -160,6 +160,10 @@ module.exports = {
             }
         }
 
+        // Start continuous 24/7 voice channel watchdog (monitors every 20s and auto-rejoins if disconnected)
+        const twentyFourSevenManager = require('../utils/twentyFourSevenManager');
+        twentyFourSevenManager.startWatchdog(client, 20000);
+
         const inviteUrl = generateInviteUrl(client.user.id);
         logger.info(`Invite URL: ${inviteUrl}`);
 

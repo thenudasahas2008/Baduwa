@@ -451,6 +451,7 @@ function registerLavalinkEvents(client) {
     });
 
     client.lavalink.on("playerCreate", (player) => {
+        player.client = client;
         const originalDestroy = player.destroy.bind(player);
         player.destroy = async function (reason, disconnect = true) {
             const is247 = Boolean(client.is247Enabled?.(player.guildId));

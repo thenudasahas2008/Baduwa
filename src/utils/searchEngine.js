@@ -1105,12 +1105,18 @@ function isRateLimitError(errOrRes) {
     return status === 429 || /429|RATE_LIMITED|rate\s*limited|Too Many Requests/i.test(msg);
 }
 
+function getDiscordClient(player) {
+    return player?.client || player?.LavalinkManager?.options?.client || player?.LavalinkManager?.client;
+}
+
 function markPlayerNodeRateLimited(player, reason = 'YouTube HTTP 429 Rate Limited') {
     const node = player?.node;
     const host = node?.options?.host || node?.host;
     const port = node?.options?.port || node?.port;
-    if (host && port && player?.client?.publicNodeProvider) {
-        player.client.publicNodeProvider.markNodeFailed(host, port, reason, 'RATE_LIMITED');
+    const client = getDiscordClient(player);
+    if (host && port && client?.publicNodeProvider) {
+        logger.warn(`[SEARCH] Marking Lavalink node ${host}:${port} as rate-limited: ${reason}`);
+        client.publicNodeProvider.markNodeFailed(host, port, reason, 'RATE_LIMITED');
     }
 }
 
@@ -1168,8 +1174,9 @@ async function executeSearchMusic(player, trimmed, requestUser, options = {}) {
         if (isRateLimited) {
             logger.warn(`[SEARCH] Lavalink node rate-limited on YouTube for "${trimmed}". Marking node and migrating...`);
             markPlayerNodeRateLimited(player, 'YouTube HTTP 429 Rate Limited');
-            if (player?.client?.lavalinkConnectionManager?.migratePlayerToHealthyNode) {
-                const migrated = await player.client.lavalinkConnectionManager.migratePlayerToHealthyNode(player, 'youtube-429-rate-limit').catch(() => false);
+            const client = getDiscordClient(player);
+            if (client?.lavalinkConnectionManager?.migratePlayerToHealthyNode) {
+                const migrated = await client.lavalinkConnectionManager.migratePlayerToHealthyNode(player, 'youtube-429-rate-limit').catch(() => false);
                 if (migrated) {
                     try {
                         res = await searchWithTimeout(player, { query: classification.canonicalUrl }, requestUser, 8000, options.signal);
@@ -1219,13 +1226,16 @@ async function executeSearchMusic(player, trimmed, requestUser, options = {}) {
                 if (!matchedRes?.tracks?.length && !options.signal?.aborted) {
                     matchedRes = await searchWithTimeout(player, { query: fallbackQuery, source: 'ytsearch' }, requestUser, 5000, options.signal).catch(() => null);
                 }
+                if (!matchedRes?.tracks?.length && !options.signal?.aborted) {
+                    matchedRes = await searchWithTimeout(player, { query: fallbackQuery, source: 'scsearch' }, requestUser, 5000, options.signal).catch(() => null);
+                }
             } catch (fallbackErr) {
                 logger.debug(`oEmbed search query failed:`, fallbackErr?.message || fallbackErr);
             }
 
             if (matchedRes?.tracks?.length) {
                 const matchedTrack = classification.id
-                    ? matchedRes.tracks.find(t => t.info?.identifier === classification.id)
+                    ? (matchedRes.tracks.find(t => t.info?.identifier === classification.id) || matchedRes.tracks[0])
                     : matchedRes.tracks[0];
                 if (matchedTrack) {
                     if (ytMeta.thumbnail && !matchedTrack.info?.artworkUrl) {
@@ -1241,9 +1251,12 @@ async function executeSearchMusic(player, trimmed, requestUser, options = {}) {
             }
         }
 
+        const friendlyMessage = (isRateLimitError(lastError) || isRateLimitError(res))
+            ? 'YouTube is currently rate-limiting direct video connections on public nodes. Please try searching by song name (e.g. /play song name) or using a Spotify link!'
+            : (lastError?.message || res?.exception?.message || 'YouTube track unavailable or private');
         return {
             loadType: 'error',
-            exception: { message: lastError?.message || res?.exception?.message || 'YouTube track unavailable or private' },
+            exception: { message: friendlyMessage },
             tracks: [],
             confidence: CONFIDENCE_LEVELS.LOW,
         };
@@ -1457,8 +1470,9 @@ async function executeSearchMusic(player, trimmed, requestUser, options = {}) {
         if (isRateLimited) {
             logger.warn(`[SEARCH] Lavalink node rate-limited on YouTube text search for "${trimmed}". Marking node and migrating...`);
             markPlayerNodeRateLimited(player, 'YouTube HTTP 429 Rate Limited (Text Search)');
-            if (player?.client?.lavalinkConnectionManager?.migratePlayerToHealthyNode) {
-                const migrated = await player.client.lavalinkConnectionManager.migratePlayerToHealthyNode(player, 'text-search-429-rate-limit').catch(() => false);
+            const client = getDiscordClient(player);
+            if (client?.lavalinkConnectionManager?.migratePlayerToHealthyNode) {
+                const migrated = await client.lavalinkConnectionManager.migratePlayerToHealthyNode(player, 'text-search-429-rate-limit').catch(() => false);
                 if (migrated) {
                     try {
                         const [retryYtm, retryYt] = await Promise.all([

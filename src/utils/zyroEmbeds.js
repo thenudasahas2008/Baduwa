@@ -265,7 +265,9 @@ function createNowPlayingEmbed(player, track, client) {
         });
     }
 
-    const botDisplayName = (client?.user?.username || 'Baduwa').replace(/[^\w\s]/g, '').trim() || 'Baduwa';
+    const botDisplayName = client?.user?.username
+        ? client.user.username.replace(/[^\w\s]/g, '').trim() || 'Baduwa'
+        : (client?.brandingName || 'ZYRO');
     const botUpper = botDisplayName.toUpperCase();
     const authorText = isPaused ? `⏸️ ${botUpper} • PAUSED` : `🎵 ${botUpper} • NOW PLAYING`;
     const embed = new EmbedBuilder()
@@ -295,7 +297,9 @@ function createStoppedEmbed(player, client, voiceChannelId) {
     const is247 = client?.is247Enabled ? client.is247Enabled(player?.guildId) : false;
     const channelId = voiceChannelId || player?.voiceChannelId || (player?.guildId && client?.guildSettings?.get(player.guildId)?.voiceChannelId);
     const channelMention = channelId ? `<#${channelId}>` : 'voice channel';
-    const botDisplayName = (client?.user?.username || 'Baduwa').replace(/[^\w\s]/g, '').trim() || 'Baduwa';
+    const botDisplayName = client?.user?.username
+        ? client.user.username.replace(/[^\w\s]/g, '').trim() || 'Baduwa'
+        : (client?.brandingName || 'ZYRO');
     const botUpper = botDisplayName.toUpperCase();
 
     return new EmbedBuilder()
@@ -311,7 +315,9 @@ function createStoppedEmbed(player, client, voiceChannelId) {
  */
 function createUnavailableEmbed(player, client) {
     const is247 = client?.is247Enabled ? client.is247Enabled(player?.guildId) : false;
-    const botDisplayName = (client?.user?.username || 'Baduwa').replace(/[^\w\s]/g, '').trim() || 'Baduwa';
+    const botDisplayName = client?.user?.username
+        ? client.user.username.replace(/[^\w\s]/g, '').trim() || 'Baduwa'
+        : (client?.brandingName || 'ZYRO');
     const botUpper = botDisplayName.toUpperCase();
 
     return new EmbedBuilder()

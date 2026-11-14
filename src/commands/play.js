@@ -328,6 +328,7 @@ module.exports = {
                 player.voiceChannelId = voiceChannel.id;
                 player.textChannelId = interaction.channel?.id || voiceChannel.id;
             }
+            player.client = client;
 
             // Always ensure player is attached to activeNode if current node is disconnected
             if (activeNode && activeNode.connected && (!player.node || !player.node.connected)) {

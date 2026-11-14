@@ -175,18 +175,17 @@ async function init() {
   });
 
   // ---- extractors ---------------------------------------------------------
+  // Only load the extractors used (Spotify + SoundCloud) to conserve container memory
   const defaults = await player.extractors.loadDefault(
-    (ext) => ext !== 'YouTubeExtractor',
+    (ext) => ext === 'SpotifyExtractor' || ext === 'SoundCloudExtractor',
     {
       SpotifyExtractor: {},
     }
   );
   if (!defaults.success) console.error('[bot] default extractors failed to load:', defaults.error);
 
-  const poToken = await initPoToken();
   const ytOptions = {};
   if (config.youtubeCookie) ytOptions.cookie = config.youtubeCookie;
-  if (poToken) ytOptions.poToken = poToken;
 
   await player.extractors.register(YoutubeExtractor, ytOptions);
   log('extractors ready:', player.extractors.size);

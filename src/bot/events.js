@@ -39,30 +39,28 @@ function setupWatchdog(queue, track) {
   if (!guildId) return;
   clearWatchdog(guildId);
 
-  // Watchdog: If track has started but no audio bytes / playback time within 15 seconds, force-skip once
+  // Watchdog: If track has started but playback is stalled after 25 seconds, force-skip once
   const timer = setTimeout(() => {
     try {
       if (!queue || !queue.isPlaying()) return;
       if (queue.currentTrack !== track) return;
 
-      const streamTime = queue.node?.streamTime ?? queue.dispatcher?.streamTime ?? 0;
-      const bytesSent = queue.connection?.networking?.state?.udp?.bytesSent ?? null;
-      const isSilent = streamTime <= 0 || (bytesSent !== null && bytesSent === 0);
+      const streamTime = queue.node?.playbackTime ?? queue.node?.streamTime ?? 0;
+      const isBuffering = typeof queue.node?.isBuffering === 'function' && queue.node.isBuffering();
 
-      if (isSilent) {
+      if (streamTime <= 0 && !queue.node.isPaused() && !isBuffering) {
         console.warn(
-          `[watchdog] Silent stream detected for "${track.title}" in guild "${queue.guild.name}" ` +
-          `(streamTime: ${streamTime}ms, bytesSent: ${bytesSent}). Force-skipping once...`
+          `[watchdog] Stalled stream detected for "${track.title}" in guild "${queue.guild.name}". Skipping to next track...`
         );
         safeSend(queue, {
-          content: `⚠️ Audio output was not detected for **${track.title}** after 15s — skipping to next track.`,
+          content: `⚠️ Playback stalled for **${track.title}** — skipping to next track.`,
         });
         queue.node.skip();
       }
     } catch (e) {
       console.error('[watchdog] error during check:', e.message);
     }
-  }, 15_000);
+  }, 25_000);
 
   silentWatchdogs.set(guildId, timer);
 }

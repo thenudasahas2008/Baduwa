@@ -2,7 +2,6 @@
 // creation with 24/7 aware options, autoplay kick, enqueue + start logic.
 const { QueryType, QueueRepeatMode } = require('discord-player');
 const store = require('./store');
-const prefetch = require('./prefetch');
 const spotify = require('./spotify');
 
 function isUrl(q) {
@@ -32,8 +31,7 @@ function baseQueueOptions(guildId, textChannel) {
     leaveOnStopCooldown: 0,
     repeatMode: f.autoplay ? QueueRepeatMode.AUTOPLAY : QueueRepeatMode.OFF,
     maxHistorySize: 500,
-    onBeforeCreateStream: prefetch.onBeforeCreateStream,
-    bufferingTimeout: 1000,
+    bufferingTimeout: 2000,
   };
 }
 
@@ -45,15 +43,14 @@ function createEngine(player) {
       queue = player.nodes.create(guild, baseQueueOptions(guild.id, textChannel));
     }
     if (textChannel) queue.metadata = { channel: textChannel };
-    if (voiceChannel && !queue.connection && !queue.channel) {
-      // connect() is async; caller awaits ensureQueue + connect below
-    }
     return queue;
   }
 
   async function ensureQueueConnected(guild, voiceChannel, textChannel) {
     const queue = ensureQueue(guild, voiceChannel, textChannel);
-    if (voiceChannel && (!queue.connection || !queue.channel)) {
+    const me = guild.members.me;
+    const isConnected = me && me.voice && me.voice.channelId && queue.connection && queue.channel;
+    if (voiceChannel && (!isConnected || queue.channel.id !== voiceChannel.id)) {
       await queue.connect(voiceChannel);
     }
     return queue;
@@ -66,6 +63,7 @@ function createEngine(player) {
     queue.options.leaveOnEmptyCooldown = f.twenty4seven ? 0 : 300_000;
     queue.options.leaveOnEnd = !f.twenty4seven;
     queue.options.leaveOnStop = !f.twenty4seven;
+    queue.options.pauseOnEmpty = false;
     if (queue.repeatMode !== QueueRepeatMode.TRACK && queue.repeatMode !== QueueRepeatMode.QUEUE) {
       queue.setRepeatMode(f.autoplay ? QueueRepeatMode.AUTOPLAY : QueueRepeatMode.OFF);
     }
@@ -93,50 +91,54 @@ function createEngine(player) {
       const tracks = res.playlist.tracks.slice();
       queue.addTrack(tracks);
       if (!queue.isPlaying() && !queue.node.isPaused()) {
-        queue.node.play().catch(() => {});
+        queue.node.play().catch((err) => console.error('[music] queue.node.play error:', err));
       }
-      prefetch.prefetchNext(queue);
       return { count: tracks.length, first: tracks[0], playlist: res.playlist };
     }
+
     const track = res.tracks[0];
-    if (!track) throw new Error('No track found');
-    track.requestedBy = user || track.requestedBy;
     queue.addTrack(track);
     if (!queue.isPlaying() && !queue.node.isPaused()) {
-      queue.node.play().catch(() => {});
+      queue.node.play().catch((err) => console.error('[music] queue.node.play error:', err));
     }
-    prefetch.prefetchNext(queue);
     return { count: 1, first: track, playlist: null };
   }
 
-  // Progressive search+add for spotify track lists (concurrency 5).
   async function addFromQueries(queue, user, resolved) {
-    const queries = resolved.queries.slice(0, 100);
-    const found = [];
-    const BATCH = 5;
-    for (let i = 0; i < queries.length; i += BATCH) {
-      const slice = queries.slice(i, i + BATCH);
-      const results = await Promise.all(
-        slice.map((q) =>
-          player
-            .search(q, { requestedBy: user, searchEngine: QueryType.YOUTUBE_SEARCH })
-            .then((res) => (res.tracks.length ? res.tracks[0] : null))
-            .catch(() => null)
-        )
-      );
-      const batch = results.filter(Boolean);
-      if (batch.length) {
-        queue.addTrack(batch);
-        found.push(...batch);
-        if (found.length === batch.length && !queue.isPlaying() && !queue.node.isPaused()) {
-          queue.node.play().catch(() => {});
-        }
+    const queries = resolved.queries.slice();
+    const batchSize = 6;
+    const firstBatch = queries.splice(0, batchSize);
+
+    const lookupOne = async (q) => {
+      try {
+        const res = await player.search(q, { requestedBy: user, searchEngine: QueryType.YOUTUBE_SEARCH });
+        return res.tracks[0] || null;
+      } catch {
+        return null;
       }
+    };
+
+    const firstTracks = (await Promise.all(firstBatch.map(lookupOne))).filter(Boolean);
+    if (!firstTracks.length) throw new Error(`Could not find any tracks for "${resolved.title}".`);
+
+    firstTracks.forEach((t) => queue.addTrack(t));
+    if (!queue.isPlaying() && !queue.node.isPaused()) {
+      await queue.node.play().catch((err) => console.error('[music] queue.node.play error:', err));
     }
-    if (!found.length) throw new Error('Could not find any of the Spotify playlist songs on YouTube — try again.');
-    prefetch.prefetchNext(queue);
+
+    if (queries.length) {
+      (async () => {
+        while (queries.length) {
+          const slice = queries.splice(0, batchSize);
+          const tracks = (await Promise.all(slice.map(lookupOne))).filter(Boolean);
+          tracks.forEach((t) => queue.addTrack(t));
+        }
+      })().catch((e) => console.error('[spotify] background enqueue failed:', e.message));
+    }
+
+    const found = firstTracks.slice();
     return {
-      count: found.length,
+      count: resolved.queries.length,
       first: found[0],
       playlist: { title: resolved.title, tracks: found, source: 'spotify' },
     };
@@ -151,7 +153,10 @@ function createEngine(player) {
     if (!query) throw new Error('Query cannot be empty — give a song name or a link.');
 
     const queue = await ensureQueueConnected(p.guild, p.voiceChannel, p.textChannel);
-    store.touchChannels(p.guild.id, { voiceChannelId: p.voiceChannel ? p.voiceChannel.id : null, textChannelId: p.textChannel ? p.textChannel.id : null });
+    store.touchChannels(p.guild.id, {
+      voiceChannelId: p.voiceChannel ? p.voiceChannel.id : null,
+      textChannelId: p.textChannel ? p.textChannel.id : null,
+    });
 
     if (spotify.isSpotifyUrl(query)) {
       const resolved = await spotify.resolveLink(query).catch((e) => {
@@ -212,11 +217,19 @@ function createEngine(player) {
     const next = (pool.length ? pool : tracks).find((t) => (t.durationMS || 0) > 60_000) || (pool.length ? pool[0] : tracks[0]);
     if (!next) return false;
     queue.addTrack(next);
-    if (!queue.isPlaying() && !queue.node.isPaused()) await queue.node.play().catch(() => {});
+    if (!queue.isPlaying() && !queue.node.isPaused()) {
+      await queue.node.play().catch((err) => console.error('[music] kickAutoplay play error:', err));
+    }
     return true;
   }
 
   return { playQuery, ensureQueue, ensureQueueConnected, applyFlagsToQueue, kickAutoplay };
 }
 
-module.exports = { createEngine, baseQueueOptions, isUrl, isYouTubeUrl, extractVideoId };
+module.exports = {
+  createEngine,
+  baseQueueOptions,
+  isUrl,
+  isYouTubeUrl,
+  extractVideoId,
+};

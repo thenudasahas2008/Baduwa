@@ -1,5 +1,6 @@
 // Bot bootstrap: client, player, extractors, event wiring, slash command deploy,
 // 24/7 auto-rejoin on boot, connection watchdog, and audio stream safeguards.
+const fs = require('node:fs');
 const { Client, GatewayIntentBits, Events, ChannelType } = require('discord.js');
 const { Player } = require('discord-player');
 const { YoutubeExtractor } = require('discord-player-youtubei');
@@ -16,8 +17,23 @@ const context = require('./context');
 // --- Audio & Environment Setup ---------------------------------------------
 try {
   const ffmpegStatic = require('ffmpeg-static');
-  if (ffmpegStatic && !process.env.FFMPEG_PATH) {
+  if (ffmpegStatic && fs.existsSync(ffmpegStatic)) {
     process.env.FFMPEG_PATH = ffmpegStatic;
+  } else {
+    // If ffmpeg binary was blocked or missing on container/host, run installer
+    try {
+      const installScript = require.resolve('ffmpeg-static/install.js');
+      if (fs.existsSync(installScript)) {
+        require('node:child_process').execSync(`"${process.execPath}" "${installScript}"`, {
+          stdio: 'ignore',
+        });
+        if (fs.existsSync(ffmpegStatic)) {
+          process.env.FFMPEG_PATH = ffmpegStatic;
+        }
+      }
+    } catch {
+      /* fallback to system PATH */
+    }
   }
 } catch {
   /* best effort */
@@ -28,7 +44,7 @@ if (!process.env.USER_AGENT) {
     'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/133.0.0.0 Safari/537.36';
 }
 
-const WATCHDOG_INTERVAL = 5 * 60 * 1000;
+const WATCHDOG_INTERVAL = 15 * 1000; // 15 seconds fast watchdog for 24/7 permanence
 
 function log(...args) {
   console.log('[bot]', ...args);
@@ -61,26 +77,6 @@ async function verifyVoiceEnvironment() {
   }
 }
 
-async function initPoToken() {
-  try {
-    const { BotGuardSimplified } = require('simple-ytdl-core');
-    const { getInnertube } = require('discord-player-youtubei');
-    const tube = await getInnertube({
-      cookie: config.youtubeCookie || null,
-    });
-    const bg = await BotGuardSimplified.create(tube);
-    const token = await bg.createBindingToken('dQw4w9WgXcQ');
-    await bg.shutdown().catch(() => {});
-    if (token) {
-      log('YouTube PoToken ready & cached:', `${token.slice(0, 16)}...`);
-      return token;
-    }
-  } catch (e) {
-    log('YouTube PoToken notice (will stream via Innertube fallback):', e.message);
-  }
-  return null;
-}
-
 function checkDuplicateInstance(client) {
   for (const [, guild] of client.guilds.cache) {
     const me = guild.members.me;
@@ -92,7 +88,7 @@ function checkDuplicateInstance(client) {
           `in guild "${guild.name}"!\n` +
           `Another process is likely logged in with the same DISCORD_TOKEN.\n` +
           `A ghost instance will hold the voice socket and cause "song plays but no sound heard".\n` +
-          `Please stop any other running bot instances.\n` +
+          `Please stop any other running bot instances (e.g. on Bot-Hosting or local PC).\n` +
           `================================================================================\n`
       );
     }
@@ -125,22 +121,23 @@ async function rejoin247(client, player, onlyIfDisconnected = true) {
     try {
       const guild = client.guilds.cache.get(guildId);
       if (!guild) continue;
+      const me = guild.members.me;
+      const inVoice = Boolean(me && me.voice && me.voice.channelId);
+      if (inVoice && onlyIfDisconnected) continue;
+
       const vcId = store.flags(guildId).lastVoiceChannelId;
       if (!vcId) continue;
       const channel = guild.channels.cache.get(vcId);
       if (!channel || channel.type !== ChannelType.GuildVoice) continue;
 
-      let queue = player.nodes.get(guildId);
-      if (queue && queue.connection && onlyIfDisconnected) continue;
-
       log(`[24/7] rejoining ${guild.name} -> ${channel.name}`);
+      let queue = player.nodes.get(guildId);
       queue = queue || player.nodes.create(guild, baseQueueOptions(guildId, null));
-      if (!queue.connection || !queue.channel) {
+      if (!inVoice) {
         await queue.connect(channel).catch((e) =>
           log(`[24/7] connect failed for ${guild.name}:`, e.message)
         );
       }
-      // show a standby line under the channel name until a song starts
       if (queue.channel && !queue.isPlaying()) vcStatus.setStandby(queue, 'twenty4seven');
     } catch (e) {
       console.error('[24/7] rejoin error for guild', guildId, e.message);
@@ -203,6 +200,38 @@ async function init() {
     await syncSlashCommands(c);
     await rejoin247(c, player, false);
     setInterval(() => rejoin247(c, player, true).catch(() => {}), WATCHDOG_INTERVAL).unref();
+  });
+
+  // 24/7 instant auto-reconnect on disconnect / kick / server move
+  client.on(Events.VoiceStateUpdate, async (oldState, newState) => {
+    if (oldState.member?.id !== client.user?.id) return;
+
+    const guildId = oldState.guild.id;
+    const f = store.flags(guildId);
+    if (!f.twenty4seven) return;
+
+    // If bot was disconnected from voice channel
+    if (oldState.channelId && !newState.channelId) {
+      log(`[24/7] Bot was disconnected from ${oldState.channel?.name || oldState.channelId} in ${oldState.guild.name}. Reconnecting in 2s...`);
+      setTimeout(async () => {
+        try {
+          const me = oldState.guild.members.me;
+          if (me && me.voice && me.voice.channelId) return; // already back
+
+          const targetChannelId = f.lastVoiceChannelId || oldState.channelId;
+          const targetChannel = oldState.guild.channels.cache.get(targetChannelId);
+          if (targetChannel && targetChannel.type === ChannelType.GuildVoice) {
+            let queue = player.nodes.get(guildId);
+            queue = queue || player.nodes.create(oldState.guild, baseQueueOptions(guildId, null));
+            await queue.connect(targetChannel).catch((e) => log(`[24/7] reconnect error:`, e.message));
+            log(`[24/7] Reconnected to ${targetChannel.name} in ${oldState.guild.name}`);
+            if (queue.channel && !queue.isPlaying()) vcStatus.setStandby(queue, 'twenty4seven');
+          }
+        } catch (e) {
+          console.error('[24/7] voiceStateUpdate reconnect failed:', e.message);
+        }
+      }, 2000);
+    }
   });
 
   client.on(Events.InteractionCreate, async (interaction) => {

@@ -204,7 +204,7 @@ async function handlePlayerInteraction(interaction, action, args = []) {
             await stopPlayer(client, player, { channelId: interaction.channel?.id });
 
             await safeReply(interaction, {
-                embeds: [createActionEmbed('success', 'Playback Stopped', 'Playback stopped and queue cleared. ZYRO remains connected to voice.')],
+                embeds: [createActionEmbed('success', 'Playback Stopped', 'Playback stopped and queue cleared. Baduwa remains connected to voice.')],
                 flags: MessageFlags.Ephemeral
             });
             break;
@@ -235,7 +235,7 @@ async function handlePlayerInteraction(interaction, action, args = []) {
                     'info',
                     newAutoplay ? 'Autoplay Enabled' : 'Autoplay Disabled',
                     newAutoplay
-                        ? 'ZYRO will automatically discover and queue related tracks when the queue ends.'
+                        ? 'Baduwa will automatically discover and queue related tracks when the queue ends.'
                         : 'Autoplay has been turned off.'
                 )],
                 flags: MessageFlags.Ephemeral
@@ -481,7 +481,7 @@ async function handleButtonInteraction(interaction) {
                         const verifiedEmbed = createActionEmbed(
                             'success',
                             'Server Activated!',
-                            `The server owner (<@${targetOwnerId}>) has been verified in the official support server.\nZYRO music playback features are unlocked for this server!`
+                            `The server owner (<@${targetOwnerId}>) has been verified in the official support server.\nBaduwa music playback features are unlocked for this server!`
                         );
                         await safeReply(interaction, { embeds: [verifiedEmbed], flags: MessageFlags.Ephemeral });
                     } else {

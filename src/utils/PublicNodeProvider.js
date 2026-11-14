@@ -43,6 +43,12 @@ const NODE_INCOMPATIBLE_COOLDOWN_MS = 30 * 60 * 1000; // 30 minutes for confirme
 const NODE_AUTH_COOLDOWN_MS = 15 * 60 * 1000; // 15 minutes for auth failure
 const NODE_RATE_LIMIT_COOLDOWN_MS = 60 * 1000; // 1 minute for temporary rate limits
 
+const PREFERRED_FAST_HOSTS = [
+    'lava-v4.millohost.my.id',
+    'lavalink.nazha.online',
+    'lavalink-v4.triniumhost.com',
+];
+
 class PublicNodeProvider {
     constructor() {
         this.nodes = [];
@@ -260,11 +266,18 @@ class PublicNodeProvider {
                     return this.nodes.length > 0;
                 }
 
-                // Prioritize secure (TLS/wss) nodes first, with standard nodes as fallback
-                const secureNodes = allV4Nodes.filter(node => node.secure === true);
-                const insecureNodes = allV4Nodes.filter(node => node.secure !== true);
+                // Prioritize known high-performance low-latency secure nodes first
+                const preferredSecure = [];
+                const otherSecure = [];
+                for (const node of secureNodes) {
+                    if (PREFERRED_FAST_HOSTS.includes(node.host)) {
+                        preferredSecure.push(node);
+                    } else {
+                        otherSecure.push(node);
+                    }
+                }
 
-                this.nodes = [...secureNodes, ...insecureNodes];
+                this.nodes = [...preferredSecure, ...otherSecure, ...insecureNodes];
                 this.currentIndex = 0;
 
                 logger.info(`Discovered ${this.nodes.length} validated public Lavalink v4 nodes (${secureNodes.length} secure, ${insecureNodes.length} standard)`);
@@ -628,7 +641,8 @@ class PublicNodeProvider {
                 const failCount = record ? (record.failCount || 0) : 0;
                 const stallCount = record ? (record.stallCount || 0) : 0;
                 const successCount = record ? (record.playbackSuccessCount || 0) : 0;
-                const score = (successCount * 10) - (failCount * 5) - (stallCount * 15);
+                const bonus = PREFERRED_FAST_HOSTS.includes(candidate.host) ? 100 : 0;
+                const score = (successCount * 10) - (failCount * 5) - (stallCount * 15) + bonus;
                 candidates.push({ candidate, score, failCount, stallCount, index });
             }
         }

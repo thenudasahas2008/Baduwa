@@ -542,7 +542,7 @@ class LavalinkConnectionManager {
 
                 if (hasVoiceData) {
                     try {
-                        logger.info(`Migrating player for guild ${player.guildId} from ${player.node.id} to ${newNode.id}...`);
+                        logger.info(`Migrating player for guild ${player.guildId} from ${player.node?.id || 'disconnected'} to ${newNode.id}...`);
                         await player.changeNode(newNode, false);
                         logger.info(`Successfully migrated player for guild ${player.guildId} to ${newNode.id}`);
                         this.client.voiceChannelStatusManager?.updateFromPlayer(player, player.queue?.current, player.paused ? 'paused' : 'playing').catch(() => {});

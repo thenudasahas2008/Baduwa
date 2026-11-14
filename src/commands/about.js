@@ -26,7 +26,7 @@ function formatUptime(ms) {
 module.exports = {
     data: new SlashCommandBuilder()
         .setName('about')
-        .setDescription('Displays detailed information about ZYRO Music.'),
+        .setDescription('Displays detailed information about Baduwa (ZYRO) Music.'),
     async execute(interaction) {
         const { client } = interaction;
 
@@ -34,9 +34,9 @@ module.exports = {
 
         const embed = new EmbedBuilder()
             .setColor(COLORS.PRIMARY)
-            .setTitle('⚡ About ZYRO Music')
+            .setTitle('⚡ About Baduwa (ZYRO) Music')
             .setDescription(
-                '**ZYRO** is a premium, high-fidelity Discord music bot engineered for crystal-clear audio, seamless queue automation, and uninterrupted 24/7 playback.'
+                '**Baduwa** is a premium, high-fidelity Discord music bot engineered for crystal-clear audio, seamless queue automation, and uninterrupted 24/7 playback.'
             );
 
         const avatarUrl = client.user?.displayAvatarURL?.() || null;
@@ -47,7 +47,7 @@ module.exports = {
         embed.addFields(
                 {
                     name: '👑 Developer & Team',
-                    value: `**Lead Developer:** \`zyrox_01xi\`\n**Brand:** \`ZYRO Music Systems\``,
+                    value: `**Lead Developer:** \`zyrox_01xi\`\n**Brand:** \`Baduwa Music Systems\``,
                     inline: true,
                 },
                 {
@@ -66,7 +66,7 @@ module.exports = {
                     inline: false,
                 }
             )
-            .setFooter({ text: 'ZYRO • Built for audiophiles and high-traffic communities' })
+            .setFooter({ text: 'Baduwa Music • Built for audiophiles and high-traffic communities' })
             .setTimestamp();
 
         const row = new ActionRowBuilder().addComponents(

@@ -284,7 +284,7 @@ module.exports = {
                 ? createActionEmbed(
                     'info',
                     '24/7 Mode Enabled',
-                    '24/7 Mode Enabled — ZYRO will remain connected to the configured voice channel when playback stops, as long as the connection and channel remain available.'
+                    '24/7 Mode Enabled — Baduwa will remain connected to the configured voice channel when playback stops, as long as the connection and channel remain available.'
                 )
                 : createActionEmbed(
                     'info',

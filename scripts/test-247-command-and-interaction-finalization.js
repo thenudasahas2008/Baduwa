@@ -143,7 +143,7 @@ function createMockInteraction(options = {}) {
         const title = embed.data?.title || embed.title || '';
         const desc = embed.data?.description || embed.description || '';
         assert.match(title, /24\/7 Mode Enabled/i, 'Title indicates 24/7 enabled');
-        assert.match(desc, /ZYRO will remain connected to the configured voice channel/i, 'Description explains 24/7 retention');
+        assert.match(desc, /(Baduwa|ZYRO) will remain connected to the configured voice channel/i, 'Description explains 24/7 retention');
     });
 
     // 2. /247 disabled returns the correct final response

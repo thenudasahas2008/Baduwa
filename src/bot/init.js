@@ -181,7 +181,11 @@ async function init() {
   );
   if (!defaults.success) console.error('[bot] default extractors failed to load:', defaults.error);
 
-  const ytOptions = {};
+  const ytOptions = {
+    downloads: {
+      trialOrder: ['adaptive', 'sabr'],
+    },
+  };
   if (config.youtubeCookie) ytOptions.cookie = config.youtubeCookie;
 
   await player.extractors.register(YoutubeExtractor, ytOptions);

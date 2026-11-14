@@ -144,6 +144,8 @@ function attach(player) {
 
   player.events.on(GuildQueueEvent.playerError, (queue, error, track) => {
     clearWatchdog(queue.guild.id);
+    const msg = String(error?.message || error || '').toLowerCase();
+    if (msg.includes('epipe') || msg.includes('premature close')) return;
     console.error(`[player] error on "${track && track.title}":`, error && (error.stack || error.message || error));
     safeSend(queue, { content: `⚠️ Something went wrong while playing "${track ? track.title : 'track'}" — skipping it.` });
   });

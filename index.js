@@ -1,4 +1,15 @@
 // Entry point: boots the Discord bot with an ultra-lightweight keep-alive server.
+// Set modern FFmpeg binary path before any audio modules initialize
+const fs = require('node:fs');
+try {
+  const ffmpegStatic = require('ffmpeg-static');
+  if (ffmpegStatic && fs.existsSync(ffmpegStatic)) {
+    process.env.FFMPEG_PATH = ffmpegStatic;
+  }
+} catch {
+  /* best effort */
+}
+
 const http = require('node:http');
 const config = require('./src/config');
 

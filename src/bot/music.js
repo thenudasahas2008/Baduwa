@@ -31,7 +31,7 @@ function baseQueueOptions(guildId, textChannel) {
     leaveOnStopCooldown: 0,
     repeatMode: f.autoplay ? QueueRepeatMode.AUTOPLAY : QueueRepeatMode.OFF,
     maxHistorySize: 500,
-    bufferingTimeout: 2000,
+    bufferingTimeout: 10_000,
   };
 }
 

@@ -286,16 +286,24 @@ async function fetchComplementaryCandidates(player, lastPlayedTrack) {
         queries.push({ query: `${context.scene} music hits`, source: 'ytmsearch' });
     }
     if (context.scene === 'sinhala' || /[\u0D80-\u0DFF]/.test(rawTitle)) {
+        const collabs = extractCollaborators(rawTitle, author);
+        for (const artist of collabs) {
+            if (!isGenericArtist(artist) && !artist.includes('channel') && !artist.includes('records') && !artist.includes('entertainment')) {
+                queries.push({ query: `${artist} sinhala songs`, source: 'ytmsearch' });
+                queries.push({ query: `${artist} sinhala songs`, source: 'ytsearch' });
+            }
+        }
         if (author && !isGenericArtist(author)) {
             queries.push({ query: `${author} sinhala songs`, source: 'ytmsearch' });
+            queries.push({ query: `${author} sinhala songs`, source: 'ytsearch' });
         }
         if (title) {
             queries.push({ query: `${title} sinhala`, source: 'ytmsearch' });
+            queries.push({ query: `${title} sinhala songs`, source: 'ytsearch' });
         }
-        if (context.genre) {
-            queries.push({ query: `sinhala ${context.genre} songs`, source: 'ytmsearch' });
-        }
-        queries.push({ query: `sinhala songs playlist`, source: 'ytmsearch' });
+        queries.push({ query: 'sinhala trending songs', source: 'ytmsearch' });
+        queries.push({ query: 'sinhala songs playlist', source: 'ytmsearch' });
+        queries.push({ query: 'sinhala songs playlist', source: 'ytsearch' });
     }
 
     if (context.genre) {
@@ -468,7 +476,12 @@ async function findAutoplayTracks(player, lastPlayedTrack) {
                         if (mix?.length) {
                             candidatePool.push(...mix);
                             seedIdsSeen.add(found.info.identifier);
+                        } else {
+                            // RD mix failed (e.g. 429); use discovered search tracks directly
+                            candidatePool.push(...seedRes.tracks.filter(t => t.info?.identifier !== found.info.identifier));
                         }
+                    } else {
+                        candidatePool.push(...seedRes.tracks);
                     }
                 }
             }

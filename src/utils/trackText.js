@@ -123,12 +123,27 @@ function extractCollaborators(title = '', author = '') {
                 }
             }
         }
+
+        const pipeParts = titleStr.split(/\s*\|\s*/);
+        if (pipeParts.length > 1) {
+            for (let i = 1; i < pipeParts.length; i++) {
+                const seg = pipeParts[i].replace(/\b(official\s*(video|audio|music\s*video|lyric\s*video|visualizer)|lyric\s*video|lyrics?|audio|video|mv|hd|hq|4k|visualizer)\b/gi, '').trim();
+                if (!seg || seg.length < 2) continue;
+                const parts = seg.split(/\s+(?:feat\.?|ft\.?|featuring|with|vs\.?|x|&|\+)\s+|\s*,\s*|\s+\/\s+/i);
+                for (const p of parts) {
+                    const norm = normalizeArtist(p);
+                    if (norm && !isGenericArtist(norm)) {
+                        found.add(norm);
+                    }
+                }
+            }
+        }
     }
 
     return Array.from(found);
 }
 
-const SINHALA_ARTISTS_AND_TERMS = /\b(sinhala|baila|bailo|geeth|geetha|sindu|nonstop|derana|hiru|sarigama|torana|channa|amaradeva|victor\s*ratnayake|victor\s*rathnayake|clarence|jothipala|milton\s*mallawarachchi|rookantha|sanuka|kasun\s*kalhara|costa|smokio|kaizer|drill\s*team|iraj|ranidu|bathiya|santhush|bns|chamara\s*weerasinghe|senaka\s*batagoda|centigradz|kanchana\s*anuradhi|yohani|dinesh\s*gamage|ravi\s*jay|dilo|jayasri|jaya\s*sri|marians|gypsies|sunil\s*perera|nanda\s*malani|edward\s*jayakody|sunil\s*edirisinghe|karunarathna\s*divulgane|nadeemal|charitha\s*attalage|supun\s*perera|lahiru\s*perera|romesh\s*sugathapala|shihan\s*mihiranga|ashanthi|tehan\s*perera|manuranga|fill\s*t|master\s*d|prageeth|wasthi|adare|manike|sanda|nethu|heena|thaniwee|hitha|oba|mage|sudu|mal|sihinaya)\b/i;
+const SINHALA_ARTISTS_AND_TERMS = /\b(sinhala|baila|bailo|geeth|geetha|sindu|nonstop|derana|hiru|sarigama|torana|channa|amaradeva|victor\s*ratnayake|victor\s*rathnayake|clarence|jothipala|milton\s*mallawarachchi|rookantha|sanuka|kasun\s*kalhara|costa|smokio|kaizer|drill\s*team|iraj|ranidu|bathiya|santhush|bns|chamara\s*weerasinghe|senaka\s*batagoda|centigradz|kanchana\s*anuradhi|yohani|dinesh\s*gamage|ravi\s*jay|dilo|jayasri|jaya\s*sri|marians|gypsies|sunil\s*perera|nanda\s*malani|edward\s*jayakody|sunil\s*edirisinghe|karunarathna\s*divulgane|nadeemal|charitha\s*attalage|supun\s*perera|lahiru\s*perera|romesh\s*sugathapala|shihan\s*mihiranga|ashanthi|tehan\s*perera|manuranga|fill\s*t|master\s*d|prageeth|wasthi|amal\s*perera|muttiya|hibshi|warsha|pawi\s*yai|anda\s*manda|andamanda|grizzly\s*da\s*zombie|dilu\s*beats|sashi\s*music|dharshana|manjula\s*dilrukshi|aliona|rashini|ruwi\s*sri|uvindu|kaizer\s*kaiz|pradeep|mihiranga|amarasiri\s*peiris|gunadasa\s*kapuge|victor|malani|somathilaka|priyantha|indrachapa|nadeeka\s*guruge|kasun|nadeeka|sandun|chamara|damith\s*asanka|kingsly|shashika\s*nisansala|supun|dinesh|satheeshan|sachie\s*leoze|paradise|nuba\s*ha|maayam\s*tharu\s*rene|adare|manike|sanda|nethu|heena|thaniwee|hitha|oba|mage|sudu|mal|sihinaya)\b/i;
 const HINDI_ARTISTS_AND_TERMS = /\b(hindi|bollywood|arijit|neha\s*kakkar|badshah|shreya\s*ghoshal|pritam|atif\s*aslam|jubin\s*nautiyal|sonu\s*nigam|alka\s*yagnik|kumar\s*sanu|udit\s*narayan|t-series|zeemusiccompany|yrf)\b/i;
 const TAMIL_ARTISTS_AND_TERMS = /\b(tamil|kollywood|anirudh|ar\s*rahman|yuvan|sid\s*sriram|harris\s*jayaraj|ilayaraja|dhanush|santhosh\s*narayanan|sony\s*music\s*south)\b/i;
 const PUNJABI_ARTISTS_AND_TERMS = /\b(punjabi|bhangra|diljit|sidhu\s*moose\s*wala|karan\s*aujla|ap\s*dhillon|shubh|amrit\s*maan)\b/i;

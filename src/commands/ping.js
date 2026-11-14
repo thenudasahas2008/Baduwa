@@ -15,10 +15,11 @@ function fmtUptime(ms) {
   return `${d ? d + 'd ' : ''}${h}h ${m}m`;
 }
 
-async function execute(interaction, ctx) {
+async function execute(interaction) {
+  const client = interaction.client;
   const sent = await interaction.reply({ content: 'Pinging...', fetchReply: true });
   const roundtrip = sent.createdTimestamp - interaction.createdTimestamp;
-  const ws = ctx.client.ws.ping < 0 ? 'reconnecting' : `${Math.round(ctx.client.ws.ping)}ms`;
+  const ws = (client?.ws?.ping === undefined || client?.ws?.ping < 0) ? 'reconnecting' : `${Math.round(client.ws.ping)}ms`;
   await interaction.editReply(
     `🏓 Pong!\nRoundtrip: **${roundtrip}ms** • Gateway: **${ws}**\nUptime: **${fmtUptime(process.uptime() * 1000)}**`
   );

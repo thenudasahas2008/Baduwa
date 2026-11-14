@@ -167,6 +167,7 @@ async function fetchMusicSuggestions(query) {
         if (!response.ok) return [];
         const data = await response.json();
         if (Array.isArray(data?.results)) {
+            const queryWords = query.toLowerCase().split(/\s+/).filter(w => w.length >= 2);
             return data.results.map(item => ({
                 info: {
                     title: item.trackName || '',
@@ -175,7 +176,11 @@ async function fetchMusicSuggestions(query) {
                     artworkUrl: item.artworkUrl100 || null,
                     isExternalMusic: true,
                 }
-            })).filter(t => t.info.title);
+            })).filter(t => {
+                if (!t.info.title) return false;
+                const text = `${t.info.title} ${t.info.author}`.toLowerCase();
+                return queryWords.some(w => text.includes(w));
+            });
         }
     } catch (_) {
         // Non-blocking fallback
@@ -459,8 +464,8 @@ async function getAutocompleteChoices(client, rawInput, user) {
                 const dedupKey = makeTrackDeduplicationKey(title, author);
                 if (dedupKey && seenTrackKeys.has(dedupKey)) continue;
 
-                // For autocomplete, user is typing live; only skip extremely negative relevance (below -50)
-                if (track._relevanceScore !== undefined && track._relevanceScore <= -50) {
+                // For autocomplete, user is typing live; only include tracks with positive relevance score
+                if (track._relevanceScore !== undefined && track._relevanceScore <= 0) {
                     continue;
                 }
 

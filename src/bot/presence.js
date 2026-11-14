@@ -14,8 +14,8 @@ const IDLE_STATUSES = [
   ...ALL_STATUSES.filter((s) => s !== 'Mixing some tunes'),
 ];
 
-// Rotate every 5 seconds (rapid dynamic status updates)
-const TICK_MS = 5_000;
+// Rotate every 1 minute (60 seconds) — smooth & easy to read
+const TICK_MS = 60_000;
 
 function start(client, player) {
   let idleIndex = 0;

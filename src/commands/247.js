@@ -7,8 +7,8 @@ const { safeReply } = require('../utils/interactionHelpers');
 const twentyFourSevenManager = require('../utils/twentyFourSevenManager');
 const logger = require('../utils/logger');
 
-// Per-guild in-flight lock to guarantee exactly one toggle at a time and prevent race conditions
-const inFlight247Toggles = new Set();
+// Per-guild in-flight lock to guarantee exactly one toggle at a time and prevent race conditions with auto-expiring 8s TTL
+const inFlight247Toggles = new Map();
 
 function sanitize(msg) {
     if (!msg) return '';
@@ -95,8 +95,9 @@ module.exports = {
             });
         }
 
-        // Concurrency Guard: prevent simultaneous /247 commands in the same guild
-        if (inFlight247Toggles.has(guildId)) {
+        // Concurrency Guard: prevent simultaneous /247 commands in the same guild (auto-expires after 8s)
+        const existingLockTime = inFlight247Toggles.get(guildId);
+        if (existingLockTime && (Date.now() - existingLockTime < 8000)) {
             logger.warn(`[247-DIAG] [247_FAILURE] id=${correlationId} guild=${guildId} stage=CONCURRENCY_LOCK error="Duplicate 247 toggle already in flight" category="CONCURRENT_LOCK"`);
             return await safeReply(interaction, {
                 embeds: [createActionEmbed('warning', 'Operation In Progress', 'A 24/7 mode toggle is already in progress for this server. Please wait a moment.')],
@@ -105,7 +106,7 @@ module.exports = {
             });
         }
 
-        inFlight247Toggles.add(guildId);
+        inFlight247Toggles.set(guildId, Date.now());
 
         let currentStage = 'INITIALIZATION';
         try {
@@ -166,8 +167,18 @@ module.exports = {
                     });
                 }
 
-                // Permission check
-                const botMember = guild?.members?.me || (typeof guild?.members?.fetchMe === 'function' ? await guild.members.fetchMe().catch(() => null) : null);
+                // Permission check with bounded lookup
+                let botMember = guild?.members?.me || (client?.user?.id ? guild?.members?.cache?.get(client.user.id) : null);
+                if (!botMember && typeof guild?.members?.fetchMe === 'function') {
+                    try {
+                        botMember = await Promise.race([
+                            guild.members.fetchMe(),
+                            new Promise((_, reject) => setTimeout(() => reject(new Error('fetchMe timed out')), 1200))
+                        ]).catch(() => null);
+                    } catch (_) {
+                        botMember = null;
+                    }
+                }
                 if (botMember && targetVoiceChannel && typeof targetVoiceChannel.permissionsFor === 'function') {
                     const permissions = targetVoiceChannel.permissionsFor(botMember);
                     if (permissions && typeof permissions.has === 'function') {
@@ -294,11 +305,21 @@ module.exports = {
 
             logger.info(`[247-DIAG] [247_RESPONSE_ATTEMPT] id=${correlationId} guild=${guildId} path="${interaction.deferred ? 'editReply' : 'reply'}"`);
 
-            const replyResult = await safeReply(interaction, {
+            let replyResult = await safeReply(interaction, {
                 embeds: [embed],
                 flags: MessageFlags.Ephemeral,
                 _isFinalReply: true
             });
+
+            // If safeReply failed to deliver via editReply, deliver fallback via followUp so interaction never remains stuck on "thinking..."
+            if (!replyResult && typeof interaction.followUp === 'function') {
+                try {
+                    replyResult = await interaction.followUp({
+                        embeds: [embed],
+                        flags: MessageFlags.Ephemeral
+                    }).catch(() => null);
+                } catch (_) {}
+            }
 
             logger.info(`[247-DIAG] [247_RESPONSE_COMPLETED] id=${correlationId} guild=${guildId} status=${replyResult ? 'SUCCESS' : 'DELIVERY_FAILED'} durationMs=${getElapsedMs(respStart)}ms totalMs=${getElapsedMs(startHr)}ms`);
 
@@ -311,11 +332,22 @@ module.exports = {
             const errCategory = error?.code || error?.name || 'UNEXPECTED_ERROR';
             logger.error(`[247-DIAG] [247_FAILURE] id=${correlationId} guild=${guildId} stage=${currentStage} category="${errCategory}" durationMs=${getElapsedMs(startHr)}ms error="${sanitize(error?.message || error)}"`);
 
-            return await safeReply(interaction, {
+            let errReply = await safeReply(interaction, {
                 embeds: [createActionEmbed('error', 'Configuration Failed', 'An unexpected error occurred while toggling 24/7 mode. The setting was not changed.')],
                 flags: MessageFlags.Ephemeral,
                 _isFinalReply: true
             }).catch(() => null);
+
+            if (!errReply && typeof interaction.followUp === 'function') {
+                try {
+                    errReply = await interaction.followUp({
+                        embeds: [createActionEmbed('error', 'Configuration Failed', 'An unexpected error occurred while toggling 24/7 mode. The setting was not changed.')],
+                        flags: MessageFlags.Ephemeral
+                    }).catch(() => null);
+                } catch (_) {}
+            }
+
+            return errReply;
         } finally {
             inFlight247Toggles.delete(guildId);
         }

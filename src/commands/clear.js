@@ -31,7 +31,7 @@ module.exports = {
             const player = client.lavalink?.getPlayer(guildId);
             if (!player || (!player.queue?.current && (!player.queue?.tracks || player.queue.tracks.length === 0))) {
                 return await safeReply(interaction, {
-                    embeds: [createActionEmbed('info', 'Nothing Playing', 'ZYRO is not currently playing any track.')],
+                    embeds: [createActionEmbed('info', 'Nothing Playing', 'Baduwa is not currently playing any track.')],
                     flags: MessageFlags.Ephemeral,
                 });
             }
@@ -46,7 +46,7 @@ module.exports = {
 
             if (player.voiceChannelId && player.voiceChannelId !== voiceChannel.id) {
                 return await safeReply(interaction, {
-                    embeds: [createActionEmbed('warning', 'Different Voice Channel', 'You need to be in the same voice channel as ZYRO.')],
+                    embeds: [createActionEmbed('warning', 'Different Voice Channel', 'You need to be in the same voice channel as Baduwa.')],
                     flags: MessageFlags.Ephemeral,
                 });
             }

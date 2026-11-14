@@ -160,7 +160,7 @@ module.exports = {
                 logger.info(`[PLAY-LIFECYCLE] id=${interaction.id || 'unknown'} guild=${guildId} queryType="${queryType}" query="${sanitizedQuery}" ackMs=${ackDurationMs}ms valMs=${valDurationMs}ms connectMs=n/a searchMs=n/a playMs=n/a dashMs=n/a respMs=n/a totalMs=${totalValMs}ms status=MISSING_PERMISSIONS playback=NONE response=DELIVERED failure="Missing Connect or Speak permissions"`);
                 const permEmbed = createActionEmbed({
                     title: '🔒 Missing Permissions',
-                    description: `ZYRO requires **Connect** and **Speak** permissions in <#${voiceChannel.id}> to play music.`,
+                    description: `Baduwa requires **Connect** and **Speak** permissions in <#${voiceChannel.id}> to play music.`,
                     color: COLORS.ERROR,
                 });
                 logStage('FINAL_RESPONSE_START', 'START', 'reason=MISSING_PERMISSIONS');
@@ -504,7 +504,7 @@ module.exports = {
                     embeds: [createActionEmbed(
                         'error',
                         'Voice Connection Failed',
-                        'ZYRO could not connect to your voice channel. Please verify that ZYRO has permissions to Connect and Speak in your channel, and that Discord voice servers are responsive.'
+                        'Baduwa could not connect to your voice channel. Please verify that Baduwa has permissions to Connect and Speak in your channel, and that Discord voice servers are responsive.'
                     )],
                     flags: MessageFlags.Ephemeral
                 });

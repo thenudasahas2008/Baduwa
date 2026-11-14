@@ -1219,7 +1219,16 @@ async function executeSearchMusic(player, trimmed, requestUser, options = {}) {
         const ytMeta = await fetchYouTubeMetadata(classification.canonicalUrl || classification.id);
         if (ytMeta && ytMeta.title) {
             logger.info(`[SEARCH] Direct load failed; falling back to oEmbed search for "${ytMeta.title}" by "${ytMeta.author}"`);
-            const fallbackQuery = `${ytMeta.title} ${ytMeta.author}`.trim();
+            const cleanedTitle = String(ytMeta.title)
+                .replace(/\s*[\(\[][^\]\)]*[\)\]]/g, '')
+                .replace(/[\s\-_]+(official\s*(music\s*)?video|official\s*(music\s*)?audio|visualizer|audio|video|hd|hq|4k|lyric\s*video|lyrics?)\s*$/i, '')
+                .trim();
+            const cleanAuthor = String(ytMeta.author || '')
+                .replace(/vevo$/i, '')
+                .replace(/\s*-\s*topic$/i, '')
+                .replace(/\b(official(?:\s*youtube)?\s*channel|records?|entertainment)\b/gi, '')
+                .trim();
+            const fallbackQuery = `${cleanedTitle || ytMeta.title} ${cleanAuthor}`.trim();
             let matchedRes = null;
             try {
                 matchedRes = await searchWithTimeout(player, { query: fallbackQuery, source: 'ytmsearch' }, requestUser, 5000, options.signal).catch(() => null);
@@ -1228,6 +1237,9 @@ async function executeSearchMusic(player, trimmed, requestUser, options = {}) {
                 }
                 if (!matchedRes?.tracks?.length && !options.signal?.aborted) {
                     matchedRes = await searchWithTimeout(player, { query: fallbackQuery, source: 'scsearch' }, requestUser, 5000, options.signal).catch(() => null);
+                }
+                if (!matchedRes?.tracks?.length && !options.signal?.aborted && cleanedTitle) {
+                    matchedRes = await searchWithTimeout(player, { query: cleanedTitle, source: 'scsearch' }, requestUser, 5000, options.signal).catch(() => null);
                 }
             } catch (fallbackErr) {
                 logger.debug(`oEmbed search query failed:`, fallbackErr?.message || fallbackErr);

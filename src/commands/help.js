@@ -91,7 +91,7 @@ const COMMAND_METADATA = {
     },
     leave: {
         syntax: '/leave',
-        desc: 'Stops playback, clears the queue, disables 24/7 mode, and disconnects ZYRO from voice.',
+        desc: 'Stops playback, clears the queue, disables 24/7 mode, and disconnects Baduwa from voice.',
         example: '/leave',
         sideEffects: 'Destroys the voice session and deletes the active player message.',
     },
@@ -139,7 +139,7 @@ const COMMAND_METADATA = {
     },
     247: {
         syntax: '/247',
-        desc: 'Toggles 24/7 persistent voice presence so ZYRO remains in your voice channel permanently.',
+        desc: 'Toggles 24/7 persistent voice presence so Baduwa remains in your voice channel permanently.',
         example: '/247',
         sideEffects: 'Prevents idle timeouts and empty-channel disconnects. Persists across bot restarts.',
     },
@@ -163,7 +163,7 @@ const COMMAND_METADATA = {
     },
     invite: {
         syntax: '/invite',
-        desc: 'Generates an official Discord authorization link with required permissions to add ZYRO to other servers.',
+        desc: 'Generates an official Discord authorization link with required permissions to add Baduwa to other servers.',
         example: '/invite',
         sideEffects: 'Displays invite link with pre-configured bot permissions.',
     },
@@ -175,7 +175,7 @@ const COMMAND_METADATA = {
     },
     help: {
         syntax: '/help [category]',
-        desc: 'Opens the interactive ZYRO Help Center with command breakdowns, guides, and troubleshooting.',
+        desc: 'Opens the interactive Baduwa Help Center with command breakdowns, guides, and troubleshooting.',
         example: '/help category: playback',
         sideEffects: 'Provides interactive dropdown navigation.',
     },
@@ -200,11 +200,11 @@ function buildOverviewEmbed(client) {
     const totalCommands = client.commands?.size || Object.keys(COMMAND_METADATA).length;
 
     return new EmbedBuilder()
-        .setColor(0x7C3AED) // ZYRO Electric Violet
-        .setAuthor({ name: 'ZYRO • Help Center & Command Guide', iconURL: client.user.displayAvatarURL() })
-        .setTitle('⚡ Welcome to ZYRO Music')
+        .setColor(0x7C3AED) // Signature Electric Violet
+        .setAuthor({ name: 'Baduwa • Help Center & Command Guide', iconURL: client.user.displayAvatarURL() })
+        .setTitle('⚡ Welcome to Baduwa Music')
         .setDescription(
-            `**ZYRO** is a premium, high-fidelity Discord music bot engineered for crystal-clear audio, intelligent queue discovery, and seamless interactive controls.\n\n` +
+            `**Baduwa** is a premium, high-fidelity Discord music bot engineered for crystal-clear audio, intelligent queue discovery, and seamless interactive controls.\n\n` +
             `Use the **select menu below** to browse all **${totalCommands} registered slash commands** organized by category.`
         )
         .addFields([
@@ -230,7 +230,7 @@ function buildOverviewEmbed(client) {
             {
                 name: '🛠️ Common Troubleshooting',
                 value:
-                    '• **Bot not joining?** Ensure ZYRO has `Connect` and `Speak` channel permissions.\n' +
+                    '• **Bot not joining?** Ensure Baduwa has `Connect` and `Speak` channel permissions.\n' +
                     '• **No search results?** Try adding the artist name or paste a direct YouTube/Spotify URL.\n' +
                     '• **Activation required?** The Discord server owner must join our official support server (`/support`).',
                 inline: false,
@@ -245,7 +245,7 @@ function buildOverviewEmbed(client) {
                 inline: false,
             },
         ])
-        .setFooter({ text: 'ZYRO Music • Select a category below for full details' })
+        .setFooter({ text: 'Baduwa Music • Select a category below for full details' })
         .setTimestamp();
 }
 
@@ -280,11 +280,11 @@ function buildCategoryEmbed(client, categoryKey) {
 
     return new EmbedBuilder()
         .setColor(0x7C3AED)
-        .setAuthor({ name: `ZYRO • ${cat.label}`, iconURL: client.user.displayAvatarURL() })
+        .setAuthor({ name: `Baduwa • ${cat.label}`, iconURL: client.user.displayAvatarURL() })
         .setTitle(`${cat.emoji} ${cat.label}`)
         .setDescription(`${cat.description}\n\n**Available Commands in this Category:**`)
         .addFields(fields)
-        .setFooter({ text: `ZYRO Music • Category: ${cat.label}` })
+        .setFooter({ text: `Baduwa Music • Category: ${cat.label}` })
         .setTimestamp();
 }
 
@@ -351,7 +351,7 @@ function buildHelpComponents(currentCategory = 'overview') {
 module.exports = {
     data: new SlashCommandBuilder()
         .setName('help')
-        .setDescription('Opens the comprehensive ZYRO Music command guide and help center.')
+        .setDescription('Opens the comprehensive Baduwa Music command guide and help center.')
         .addStringOption(option =>
             option.setName('category')
                 .setDescription('Jump directly to a specific command category')

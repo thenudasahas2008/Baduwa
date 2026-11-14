@@ -7,7 +7,7 @@ const logger = require('../utils/logger');
 module.exports = {
     data: new SlashCommandBuilder()
         .setName('join')
-        .setDescription('Connects ZYRO to your voice channel.'),
+        .setDescription('Connects Baduwa to your voice channel.'),
     async execute(interaction) {
         const { client, guild, member } = interaction;
         const voiceChannel = member?.voice?.channel;
@@ -27,7 +27,7 @@ module.exports = {
                 const permissions = voiceChannel.permissionsFor(botMember);
                 if (permissions && (!permissions.has(PermissionsBitField.Flags.Connect) || !permissions.has(PermissionsBitField.Flags.Speak))) {
                     return await safeReply(interaction, {
-                        embeds: [createActionEmbed('error', 'Missing Permissions', `ZYRO requires **Connect** and **Speak** permissions in <#${voiceChannel.id}>.`)],
+                        embeds: [createActionEmbed('error', 'Missing Permissions', `Baduwa requires **Connect** and **Speak** permissions in <#${voiceChannel.id}>.`)],
                         flags: MessageFlags.Ephemeral
                     });
                 }

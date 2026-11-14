@@ -30,7 +30,7 @@ module.exports = {
 
         if (!voiceChannel) {
             return await safeReply(interaction, {
-                embeds: [createActionEmbed('warning', 'Voice Channel Required', 'You must be in a voice channel to disconnect ZYRO.')],
+                embeds: [createActionEmbed('warning', 'Voice Channel Required', 'You must be in a voice channel to disconnect Baduwa.')],
                 flags: MessageFlags.Ephemeral,
             });
         }
@@ -40,21 +40,21 @@ module.exports = {
 
         if (!player && !botVoiceChannel) {
             return await safeReply(interaction, {
-                embeds: [createActionEmbed('info', 'Not Connected', 'ZYRO is not currently in any voice channel.')],
+                embeds: [createActionEmbed('info', 'Not Connected', 'Baduwa is not currently in any voice channel.')],
                 flags: MessageFlags.Ephemeral,
             });
         }
 
         if (player?.voiceChannelId && player.voiceChannelId !== voiceChannel.id) {
             return await safeReply(interaction, {
-                embeds: [createActionEmbed('warning', 'Different Voice Channel', 'You need to be in the same voice channel as ZYRO.')],
+                embeds: [createActionEmbed('warning', 'Different Voice Channel', 'You need to be in the same voice channel as Baduwa.')],
                 flags: MessageFlags.Ephemeral,
             });
         }
 
         if (botVoiceChannel && botVoiceChannel.id !== voiceChannel.id) {
             return await safeReply(interaction, {
-                embeds: [createActionEmbed('warning', 'Different Voice Channel', 'You need to be in the same voice channel as ZYRO.')],
+                embeds: [createActionEmbed('warning', 'Different Voice Channel', 'You need to be in the same voice channel as Baduwa.')],
                 flags: MessageFlags.Ephemeral,
             });
         }
@@ -120,7 +120,7 @@ module.exports = {
         const leaveEmbed = createActionEmbed(
             'success',
             'Disconnected from Voice',
-            'Playback stopped. ZYRO disconnected from voice.'
+            'Playback stopped. Baduwa disconnected from voice.'
         );
 
         return await safeReply(interaction, {

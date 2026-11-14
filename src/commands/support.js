@@ -7,7 +7,7 @@ const logger = require('../utils/logger');
 module.exports = {
     data: new SlashCommandBuilder()
         .setName('support')
-        .setDescription('Get the official ZYRO support server link and server activation status.'),
+        .setDescription('Get the official Baduwa support server link and server activation status.'),
     async execute(interaction) {
         const { client, guild } = interaction;
         const lang = client.defaultLanguage;
@@ -29,11 +29,11 @@ module.exports = {
         }
 
         const embed = new EmbedBuilder()
-            .setColor(0x7C3AED) // ZYRO Electric Violet
-            .setAuthor({ name: 'ZYRO • Support & Community', iconURL: client.user.displayAvatarURL() })
-            .setTitle('⚡ ZYRO Official Support Center')
+            .setColor(0x7C3AED) // Signature Electric Violet
+            .setAuthor({ name: 'Baduwa • Support & Community', iconURL: client.user.displayAvatarURL() })
+            .setTitle('⚡ Baduwa Official Support Center')
             .setDescription(
-                `Welcome to **ZYRO**! Need help setting up the bot, troubleshooting audio issues, or suggesting new features? Join our vibrant community of music lovers and developers.`
+                `Welcome to **Baduwa**! Need help setting up the bot, troubleshooting audio issues, or suggesting new features? Join our vibrant community of music lovers and developers.`
             )
             .addFields([
                 {
@@ -49,7 +49,6 @@ module.exports = {
                 {
                     name: '📊 Server Status',
                     value: activationStatus,
-                    inline: false,
                 },
                 {
                     name: '🎵 Need Music Help?',
@@ -57,7 +56,7 @@ module.exports = {
                     inline: false,
                 },
             ])
-            .setFooter({ text: 'ZYRO Music • High Fidelity Discord Audio' })
+            .setFooter({ text: 'Baduwa Music • High Fidelity Discord Audio' })
             .setTimestamp();
 
         const row = new ActionRowBuilder().addComponents(
@@ -67,7 +66,7 @@ module.exports = {
                 .setURL(invite)
                 .setEmoji('🛡️'),
             new ButtonBuilder()
-                .setLabel('Invite ZYRO')
+                .setLabel('Invite Baduwa')
                 .setStyle(ButtonStyle.Link)
                 .setURL(botInvite)
                 .setEmoji('➕')

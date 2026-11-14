@@ -6,7 +6,7 @@ const logger = require('../utils/logger');
 module.exports = {
     data: new SlashCommandBuilder()
         .setName('invite')
-        .setDescription('Get a link to invite ZYRO to your server.'),
+        .setDescription('Get a link to invite Baduwa (ZYRO) to your server.'),
     async execute(interaction) {
         const { client } = interaction;
         const lang = client.defaultLanguage;

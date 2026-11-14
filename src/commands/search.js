@@ -118,7 +118,7 @@ module.exports = {
                 createdNewPlayer = true;
             } else if (player.voiceChannelId && player.voiceChannelId !== voiceChannel.id) {
                 return await safeReply(interaction, {
-                    embeds: [createActionEmbed('warning', 'Different Voice Channel', 'You need to be in the same voice channel as ZYRO to search.')],
+                    embeds: [createActionEmbed('warning', 'Different Voice Channel', 'You need to be in the same voice channel as Baduwa to search.')],
                     flags: MessageFlags.Ephemeral
                 });
             } else if (activeNode && activeNode.connected && (!player.node || !player.node.connected)) {

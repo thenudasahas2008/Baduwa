@@ -30,14 +30,14 @@ module.exports = {
 
             const dmEmbed = new EmbedBuilder()
                 .setColor(ZYRO_COLORS.PRIMARY)
-                .setTitle('🎵 Saved Track from ZYRO')
+                .setTitle('🎵 Saved Track from Baduwa')
                 .setDescription(`[**${title}**](${uri})\nby **${author}**`)
                 .addFields([
                     { name: '⏱️ Duration', value: `\`${duration}\``, inline: true },
                     { name: '🌐 Server', value: interaction.guild?.name || 'Discord Server', inline: true },
                 ])
                 .setThumbnail(artwork)
-                .setFooter({ text: 'ZYRO Music Bot • Grabbed Song' })
+                .setFooter({ text: 'Baduwa Music Bot • Grabbed Song' })
                 .setTimestamp();
 
             let dmSent = true;

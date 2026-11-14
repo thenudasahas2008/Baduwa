@@ -28,7 +28,7 @@ module.exports = {
 
             if (!player.queue?.current && !player.playing && (!player.queue?.tracks || player.queue.tracks.length === 0)) {
                 return await safeReply(interaction, {
-                    embeds: [createActionEmbed('info', 'Nothing Playing', 'ZYRO is not currently playing any track.')],
+                    embeds: [createActionEmbed('info', 'Nothing Playing', 'Baduwa is not currently playing any track.')],
                     flags: MessageFlags.Ephemeral
                 });
             }
@@ -41,7 +41,7 @@ module.exports = {
             const stopEmbed = createActionEmbed(
                 'success',
                 'Playback Stopped',
-                'Playback stopped and queue cleared. ZYRO remains connected to voice.'
+                'Playback stopped and queue cleared. Baduwa remains connected to voice.'
             );
 
             return await safeReply(interaction, {

@@ -160,7 +160,7 @@ module.exports = {
                 if (player && botVoiceChannelId && memberVoiceChannelId && botVoiceChannelId !== memberVoiceChannelId) {
                     logger.warn(`[247-DIAG] [247_FAILURE] id=${correlationId} guild=${guildId} stage=CHANNEL_MISMATCH error="User in different voice channel" category="VOICE_CHANNEL_MISMATCH"`);
                     return await safeReply(interaction, {
-                        embeds: [createActionEmbed('warning', 'Different Voice Channel', 'You need to be in the same voice channel as ZYRO.')],
+                        embeds: [createActionEmbed('warning', 'Different Voice Channel', 'You need to be in the same voice channel as Baduwa.')],
                         flags: MessageFlags.Ephemeral,
                         _isFinalReply: true
                     });
@@ -174,7 +174,7 @@ module.exports = {
                         if (!permissions.has(PermissionsBitField.Flags.Connect)) {
                             logger.warn(`[247-DIAG] [247_FAILURE] id=${correlationId} guild=${guildId} stage=PERMISSION_CHECK error="Missing Connect" category="MISSING_PERMISSIONS"`);
                             return await safeReply(interaction, {
-                                embeds: [createActionEmbed('error', 'Missing Permissions', 'ZYRO does not have permission to **Connect** to your voice channel.')],
+                                embeds: [createActionEmbed('error', 'Missing Permissions', 'Baduwa does not have permission to **Connect** to your voice channel.')],
                                 flags: MessageFlags.Ephemeral,
                                 _isFinalReply: true
                             });
@@ -182,7 +182,7 @@ module.exports = {
                         if (!permissions.has(PermissionsBitField.Flags.Speak)) {
                             logger.warn(`[247-DIAG] [247_FAILURE] id=${correlationId} guild=${guildId} stage=PERMISSION_CHECK error="Missing Speak" category="MISSING_PERMISSIONS"`);
                             return await safeReply(interaction, {
-                                embeds: [createActionEmbed('error', 'Missing Permissions', 'ZYRO does not have permission to **Speak** in your voice channel.')],
+                                embeds: [createActionEmbed('error', 'Missing Permissions', 'Baduwa does not have permission to **Speak** in your voice channel.')],
                                 flags: MessageFlags.Ephemeral,
                                 _isFinalReply: true
                             });

@@ -49,7 +49,7 @@ module.exports = {
                 'info',
                 newState ? 'Autoplay Enabled' : 'Autoplay Disabled',
                 newState
-                    ? 'ZYRO will automatically discover and queue related tracks when the queue runs out.'
+                    ? 'Baduwa will automatically discover and queue related tracks when the queue runs out.'
                     : 'Autoplay has been turned off.'
             );
 

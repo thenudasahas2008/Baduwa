@@ -59,6 +59,31 @@ module.exports = {
             client.activityManager.start();
         }
 
+        // Sync server nickname to Baduwa in all guilds immediately so it displays as Baduwa right away
+        try {
+            client.guilds?.cache?.forEach?.(guild => {
+                const me = guild.members?.me;
+                if (me && me.nickname !== INTENDED_BOT_USERNAME) {
+                    me.setNickname(INTENDED_BOT_USERNAME).catch(() => {});
+                }
+            });
+        } catch (_) {}
+
+        // Retry syncing global username every 10 minutes until Discord rate limit expires and Baduwa is set
+        const usernameSyncInterval = setInterval(async () => {
+            if (client.user?.username === INTENDED_BOT_USERNAME) {
+                clearInterval(usernameSyncInterval);
+                return;
+            }
+            const success = await syncBotUsername(client);
+            if (success) {
+                clearInterval(usernameSyncInterval);
+            }
+        }, 10 * 60 * 1000);
+        if (typeof usernameSyncInterval?.unref === 'function') {
+            usernameSyncInterval.unref();
+        }
+
         // Deploy commands without blocking Lavalink initialization
         deployCommands(client).catch(err => {
             logger.error('Failed to deploy application commands:', err?.message || err);

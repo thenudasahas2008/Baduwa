@@ -1,16 +1,33 @@
-// Entry point: boots the Discord bot.
+// Entry point: boots the Discord bot with an ultra-lightweight keep-alive server.
+const http = require('node:http');
 const config = require('./src/config');
 
 (async () => {
   try {
-    const { init } = require('./src/bot/init');
+    // 1) Lightweight HTTP server for free cloud hosts (Render, Koyeb) requiring an open port
+    const port = process.env.PORT || 3000;
+    const server = http.createServer((req, res) => {
+      res.writeHead(200, { 'Content-Type': 'text/plain' });
+      res.end('Baduwa Discord Music Bot is Online and Healthy! 🎧');
+    });
 
+    server.listen(port, () => {
+      console.log('[http] keep-alive server listening on port', port);
+    });
+
+    // 2) Boot Discord bot
+    const { init } = require('./src/bot/init');
     const { client, player, music } = await init();
 
     console.log('[main] bot booted and running');
 
     const shutdown = async (signal) => {
       console.log(`[main] ${signal} received — shutting down`);
+      try {
+        server.close();
+      } catch {
+        /* noop */
+      }
       try {
         await player.destroy();
       } catch {

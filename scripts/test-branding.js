@@ -604,22 +604,21 @@ async function runTests() {
     const { INTENDED_BOT_USERNAME: READY_NAME, syncBotUsername } = require('../src/events/ready');
     const { INTENDED_BOT_USERNAME: WELCOME_NAME } = require('../src/utils/welcomeManager');
 
-    // 19. Authoritative username constant is exactly "ZYRO ♪"
-    check('Authoritative username constant is exactly "ZYRO ♪" across all identity modules', () => {
-        assert.equal(BRANDING_NAME, 'ZYRO ♪', 'branding.js constant must be literal "ZYRO ♪"');
-        assert.equal(READY_NAME, 'ZYRO ♪', 'ready.js constant must be literal "ZYRO ♪"');
-        assert.equal(WELCOME_NAME, 'ZYRO ♪', 'welcomeManager.js constant must be literal "ZYRO ♪"');
+    // 19. Authoritative username constant is exactly "Baduwa"
+    check('Authoritative username constant is exactly "Baduwa" across all identity modules', () => {
+        assert.equal(BRANDING_NAME, 'Baduwa', 'branding.js constant must be literal "Baduwa"');
+        assert.equal(READY_NAME, 'Baduwa', 'ready.js constant must be literal "Baduwa"');
+        assert.equal(WELCOME_NAME, 'Baduwa', 'welcomeManager.js constant must be literal "Baduwa"');
         assert.equal(BRANDING_NAME.includes('**'), false, 'Username must not contain Markdown formatting');
         assert.equal(BRANDING_NAME.includes('&'), false, 'Username must not contain HTML entities');
-        assert.equal(BRANDING_NAME.endsWith('♪'), true, 'Username must end with music note character ♪');
     });
 
-    // 20. Username is not changed when it already matches "ZYRO ♪"
-    await asyncCheck('syncBotUsername skips Discord API update when username already matches "ZYRO ♪"', async () => {
+    // 20. Username is not changed when it already matches "Baduwa"
+    await asyncCheck('syncBotUsername skips Discord API update when username already matches "Baduwa"', async () => {
         let setUsernameCalled = false;
         const matchingClient = {
             user: {
-                username: 'ZYRO ♪',
+                username: 'Baduwa',
                 setUsername: async () => {
                     setUsernameCalled = true;
                 }
@@ -631,12 +630,12 @@ async function runTests() {
         assert.equal(setUsernameCalled, false, 'setUsername must NOT be called when username already matches');
     });
 
-    // 21. Startup updates username to "ZYRO ♪" when it differs from intended identity
-    await asyncCheck('syncBotUsername updates bot username to "ZYRO ♪" when current username differs', async () => {
+    // 21. Startup updates username to "Baduwa" when it differs from intended identity
+    await asyncCheck('syncBotUsername updates bot username to "Baduwa" when current username differs', async () => {
         let requestedNewName = null;
         const legacyClient = {
             user: {
-                username: 'ZYRO',
+                username: 'ZYRO ♪',
                 setUsername: async (name) => {
                     requestedNewName = name;
                     return true;
@@ -646,7 +645,7 @@ async function runTests() {
 
         const result = await syncBotUsername(legacyClient);
         assert.equal(result, true, 'syncBotUsername must return true on successful update');
-        assert.equal(requestedNewName, 'ZYRO ♪', 'Requested username update must be exactly "ZYRO ♪", never plain "ZYRO"');
+        assert.equal(requestedNewName, 'Baduwa', 'Requested username update must be exactly "Baduwa"');
     });
 
     // 22. Discord API rate limits and errors are handled gracefully without crashing
@@ -674,16 +673,16 @@ async function runTests() {
         assert.equal(result, false, 'syncBotUsername returns false when Discord API rejects update');
     });
 
-    // 23. Full ready.js execution verifies identity without reverting "ZYRO ♪" to plain "ZYRO"
-    await asyncCheck('ready.js execution does not attempt to rename "ZYRO ♪" back to plain "ZYRO"', async () => {
+    // 23. Full ready.js execution verifies identity without reverting "Baduwa"
+    await asyncCheck('ready.js execution does not attempt to change username if it is already "Baduwa"', async () => {
         const readyHandler = require('../src/events/ready');
         let attemptedName = null;
 
         const testReadyClient = {
             user: {
                 id: 'bot-1234567890',
-                tag: 'ZYRO ♪#0001',
-                username: 'ZYRO ♪',
+                tag: 'Baduwa#0001',
+                username: 'Baduwa',
                 displayAvatarURL: () => 'https://cdn.discordapp.com/avatars/bot-1234567890/avatar.png',
                 setUsername: async (n) => {
                     attemptedName = n;
@@ -697,7 +696,7 @@ async function runTests() {
         };
 
         await readyHandler.execute(testReadyClient);
-        assert.equal(attemptedName, null, 'ready.js must NOT attempt to change username if it is already "ZYRO ♪"');
+        assert.equal(attemptedName, null, 'ready.js must NOT attempt to change username if it is already "Baduwa"');
     });
 
     console.log(`\nAll ${passed} branding, welcome migration, and activity rotation tests passed successfully!`);

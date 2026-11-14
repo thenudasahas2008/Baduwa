@@ -70,7 +70,7 @@ function createActionEmbed(typeOrOptions, maybeTitle, maybeDescription, maybeFie
     let fields = [];
     let color = COLORS.PRIMARY;
     let thumbnail = null;
-    let footer = 'ZYRO Music';
+    let footer = 'Baduwa Music';
     let timestamp = true;
 
     if (typeof typeOrOptions === 'string') {
@@ -105,7 +105,7 @@ function createActionEmbed(typeOrOptions, maybeTitle, maybeDescription, maybeFie
         fields = typeOrOptions.fields || [];
         color = typeOrOptions.color || COLORS.PRIMARY;
         thumbnail = typeOrOptions.thumbnail || null;
-        footer = typeOrOptions.footer || 'ZYRO Music';
+        footer = typeOrOptions.footer || 'Baduwa Music';
         timestamp = typeOrOptions.timestamp !== false;
     }
 
@@ -265,7 +265,9 @@ function createNowPlayingEmbed(player, track, client) {
         });
     }
 
-    const authorText = isPaused ? '⏸️ ZYRO • PAUSED' : '🎵 ZYRO • NOW PLAYING';
+    const botDisplayName = (client?.user?.username || 'Baduwa').replace(/[^\w\s]/g, '').trim() || 'Baduwa';
+    const botUpper = botDisplayName.toUpperCase();
+    const authorText = isPaused ? `⏸️ ${botUpper} • PAUSED` : `🎵 ${botUpper} • NOW PLAYING`;
     const embed = new EmbedBuilder()
         .setColor(COLORS.PRIMARY)
         .setAuthor({ name: authorText, iconURL: client?.user?.displayAvatarURL?.() || null })
@@ -277,8 +279,8 @@ function createNowPlayingEmbed(player, track, client) {
     }
 
     const footerText = is247
-        ? 'ZYRO Music • 24/7 Mode Active'
-        : (isAutoplay ? 'ZYRO Music • Autoplay Active' : 'ZYRO Music • High Fidelity Audio');
+        ? `${botDisplayName} Music • 24/7 Mode Active`
+        : (isAutoplay ? `${botDisplayName} Music • Autoplay Active` : `${botDisplayName} Music • High Fidelity Audio`);
 
     embed.setFooter({ text: footerText });
     embed.setTimestamp();
@@ -293,12 +295,14 @@ function createStoppedEmbed(player, client, voiceChannelId) {
     const is247 = client?.is247Enabled ? client.is247Enabled(player?.guildId) : false;
     const channelId = voiceChannelId || player?.voiceChannelId || (player?.guildId && client?.guildSettings?.get(player.guildId)?.voiceChannelId);
     const channelMention = channelId ? `<#${channelId}>` : 'voice channel';
+    const botDisplayName = (client?.user?.username || 'Baduwa').replace(/[^\w\s]/g, '').trim() || 'Baduwa';
+    const botUpper = botDisplayName.toUpperCase();
 
     return new EmbedBuilder()
         .setColor(COLORS.NEUTRAL)
-        .setAuthor({ name: 'ZYRO • IDLE', iconURL: client?.user?.displayAvatarURL?.() || null })
-        .setDescription(`Playback stopped and queue cleared.\nZYRO remains connected in ${channelMention}.\n\n*Use \`/play\` to start music or \`/leave\` to disconnect.*`)
-        .setFooter({ text: is247 ? 'ZYRO Music • 24/7 Mode Active' : 'ZYRO Music • Ready for playback' })
+        .setAuthor({ name: `${botUpper} • IDLE`, iconURL: client?.user?.displayAvatarURL?.() || null })
+        .setDescription(`Playback stopped and queue cleared.\n${botDisplayName} remains connected in ${channelMention}.\n\n*Use \`/play\` to start music or \`/leave\` to disconnect.*`)
+        .setFooter({ text: is247 ? `${botDisplayName} Music • 24/7 Mode Active` : `${botDisplayName} Music • Ready for playback` })
         .setTimestamp();
 }
 
@@ -307,12 +311,14 @@ function createStoppedEmbed(player, client, voiceChannelId) {
  */
 function createUnavailableEmbed(player, client) {
     const is247 = client?.is247Enabled ? client.is247Enabled(player?.guildId) : false;
+    const botDisplayName = (client?.user?.username || 'Baduwa').replace(/[^\w\s]/g, '').trim() || 'Baduwa';
+    const botUpper = botDisplayName.toUpperCase();
 
     return new EmbedBuilder()
         .setColor(COLORS.WARNING)
-        .setAuthor({ name: 'ZYRO • RECONNECTING', iconURL: client?.user?.displayAvatarURL?.() || null })
+        .setAuthor({ name: `${botUpper} • RECONNECTING`, iconURL: client?.user?.displayAvatarURL?.() || null })
         .setDescription('Audio service is temporarily reconnecting to a node.\nPlayback will resume once a healthy connection is established.\n\n*Use `/help` for commands or `/leave` to disconnect.*')
-        .setFooter({ text: is247 ? 'ZYRO Music • 24/7 Mode Active' : 'ZYRO Music • Reconnecting' })
+        .setFooter({ text: is247 ? `${botDisplayName} Music • 24/7 Mode Active` : `${botDisplayName} Music • Reconnecting` })
         .setTimestamp();
 }
 

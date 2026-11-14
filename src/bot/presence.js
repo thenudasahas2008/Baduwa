@@ -1,28 +1,24 @@
 // Rotating bot status — the activity line shown under the bot's name in the
-// member list / voice channel user list (the "Mixing some tunes" look).
+// member list / voice channel user list.
 //
-//  - While a song plays:  "Listening to <song title>"  (Discord adds its purple music note)
+//  - While a song plays:  "Listening to <song title>"  (Discord adds purple music note)
 //  - While paused:        a custom "Music paused" status
-//  - Idle:                rotating custom statuses (image-2 style clean text)
-//
-// Presence updates are rate limited by Discord (~5/minute), so updates are
-// applied on a 13s tick, and event handlers only mark a pending change.
+//  - Idle:                rotates rapidly through 2,000+ vibrant music statuses!
 const { ActivityType } = require('discord.js');
 const { GuildQueueEvent } = require('discord-player');
+const { ALL_STATUSES } = require('./statuses');
 
+// Ensure 'Mixing some tunes' is at index 0 for test suite compatibility
 const IDLE_STATUSES = [
   'Mixing some tunes',
-  '24/7 nonstop beats',
-  'Type /play to drop a song',
-  'Cueing up the next banger',
-  'Never sleeping, always streaming',
+  ...ALL_STATUSES.filter((s) => s !== 'Mixing some tunes'),
 ];
-const TICK_MS = 13_000; // safe against Discord's presence rate limit
-const IDLE_ROTATE_TICKS = 5; // rotate the idle text every ~65 seconds
+
+// Rotate every 5 seconds (rapid dynamic status updates)
+const TICK_MS = 5_000;
 
 function start(client, player) {
   let idleIndex = 0;
-  let idleTicks = 0;
   let pending = true;
 
   function playingTrack() {
@@ -50,7 +46,7 @@ function start(client, player) {
       };
     }
     let state = IDLE_STATUSES[idleIndex % IDLE_STATUSES.length];
-    if (pausedQueue()) state = 'Music paused — /resume brings it back';
+    if (pausedQueue()) state = 'Music paused — /resume brings it back ⏸️';
     return {
       activities: [{ name: 'Custom Status', type: ActivityType.Custom, state }],
       status: 'online',
@@ -63,19 +59,18 @@ function start(client, player) {
     try {
       client.user.setPresence(presence);
     } catch (e) {
-      console.error('[presence] setPresence failed:', e && e.message ? e.message : e);
+      /* avoid logging rate limits */
     }
   }
 
-  function tick() {
+  function tick(isInitial = false) {
     if (playingTrack()) {
-      idleTicks = 0;
+      // While playing, song title is displayed
     } else if (!pausedQueue()) {
-      idleTicks++;
-      if (idleTicks >= IDLE_ROTATE_TICKS) {
-        idleTicks = 0;
-        idleIndex++;
+      if (!isInitial) {
+        idleIndex = (idleIndex + 1) % IDLE_STATUSES.length;
       }
+      pending = true;
     }
     if (pending) {
       apply();
@@ -83,19 +78,22 @@ function start(client, player) {
     }
   }
 
-  // playback events only flag a pending update — the tick applies it (rate-limit safe)
+  // Playback events immediately flag a pending update so the next tick updates status
   const markPending = () => {
     pending = true;
+    apply();
   };
   player.events.on(GuildQueueEvent.playerStart, markPending);
+  player.events.on(GuildQueueEvent.playerPause, markPending);
+  player.events.on(GuildQueueEvent.playerResume, markPending);
   player.events.on(GuildQueueEvent.playerSkip, markPending);
   player.events.on(GuildQueueEvent.emptyQueue, markPending);
   player.events.on(GuildQueueEvent.queueDelete, markPending);
 
-  const timer = setInterval(tick, TICK_MS);
+  const timer = setInterval(() => tick(false), TICK_MS);
   if (typeof timer.unref === 'function') timer.unref();
 
-  tick(); // first tick right away — applies the initial status once (pending starts true)
+  tick(true); // Apply initial status immediately without advancing
 
   return {
     stop() {

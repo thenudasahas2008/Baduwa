@@ -1,23 +1,64 @@
-// /stop — stop music. With 24/7 mode ON the bot stays in the voice channel.
-const { SlashCommandBuilder, InteractionContextType, ApplicationIntegrationType } = require('discord.js');
+const { SlashCommandBuilder, MessageFlags } = require('discord.js');
+const { ensureDeferred, requirePlayer, requireSameVoice, safeReply } = require('../utils/interactionHelpers');
+const { stopPlayer } = require('../utils/PlayerActions');
+const { createActionEmbed } = require('../utils/zyroEmbeds');
+const logger = require('../utils/logger');
 
-const data = new SlashCommandBuilder()
-  .setName('stop')
-  .setDescription('Stop the music and clear the queue (bot stays if 24/7 mode is on)')
-  .setContexts(InteractionContextType.Guild)
-  .setIntegrationTypes(ApplicationIntegrationType.GuildInstall);
+module.exports = {
+    data: new SlashCommandBuilder()
+        .setName('stop')
+        .setDescription('Stops playback and clears the queue while staying in the voice channel.'),
+    async execute(interaction) {
+        const { client } = interaction;
 
-async function execute(interaction, ctx) {
-  const queue = ctx.player.nodes.get(interaction.guild.id);
-  if (!queue) return void (await interaction.reply({ content: 'Nothing is playing right now.', ephemeral: true }));
-  const tf = ctx.store.flags(interaction.guild.id).twenty4seven;
-  queue.node.stop();
-  queue.clear();
-  if (tf) {
-    await interaction.reply('Stopped the music 🛑 — bot stays in the voice channel (24/7 mode is ON, use `/247` to disable).');
-  } else {
-    await interaction.reply('Stopped the music 🛑 — use `/play` to start again.');
-  }
-}
+        await ensureDeferred(interaction, { ephemeral: true });
 
-module.exports = { data, execute };
+        try {
+            const player = await requirePlayer(interaction);
+            if (!player) return;
+
+            const sameVoice = await requireSameVoice(interaction, player);
+            if (!sameVoice) return;
+
+            const channelName = interaction.channel?.name || interaction.channelId || 'unknown-channel';
+            const guildName = interaction.guild?.name || interaction.guildId || 'unknown-guild';
+            const userTag = interaction.user?.tag || interaction.user?.id || 'unknown-user';
+
+            logger.cmd(`/stop by ${userTag} in #${channelName} (Guild: ${guildName})`);
+
+            if (!player.queue?.current && !player.playing && (!player.queue?.tracks || player.queue.tracks.length === 0)) {
+                return await safeReply(interaction, {
+                    embeds: [createActionEmbed('info', 'Nothing Playing', 'ZYRO is not currently playing any track.')],
+                    flags: MessageFlags.Ephemeral
+                });
+            }
+
+            // Execute canonical stop operation: stops playback immediately, clears queue,
+            // suppresses autoplay and watchdog recovery, keeps voice connection, and renders stopped state
+            await stopPlayer(client, player, { channelId: interaction.channel?.id });
+
+
+            const stopEmbed = createActionEmbed(
+                'success',
+                'Playback Stopped',
+                'Playback stopped and queue cleared. ZYRO remains connected to voice.'
+            );
+
+            return await safeReply(interaction, {
+                embeds: [stopEmbed],
+                flags: MessageFlags.Ephemeral
+            });
+        } catch (error) {
+            if (error.code === 10062) {
+                logger.warn('Interaction expired for /stop command');
+                return;
+            }
+            logger.error('Error executing /stop command:', error);
+            const errorEmbed = createActionEmbed('error', 'Error Stopping Playback', 'An unexpected error occurred while stopping playback.');
+            return await safeReply(interaction, {
+                embeds: [errorEmbed],
+                flags: MessageFlags.Ephemeral
+            });
+        }
+    },
+};

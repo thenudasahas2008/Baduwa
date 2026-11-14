@@ -1,22 +1,66 @@
-// /remove — remove a song from the queue by its position number
-const { SlashCommandBuilder, InteractionContextType, ApplicationIntegrationType } = require('discord.js');
+const { SlashCommandBuilder, MessageFlags } = require('discord.js');
+const { ensureDeferred, requirePlayer, safeReply } = require('../utils/interactionHelpers');
+const { createActionEmbed } = require('../utils/zyroEmbeds');
+const logger = require('../utils/logger');
 
-const data = new SlashCommandBuilder()
-  .setName('remove')
-  .setDescription('Remove a song from the queue')
-  .setContexts(InteractionContextType.Guild)
-  .setIntegrationTypes(ApplicationIntegrationType.GuildInstall)
-  .addIntegerOption((o) => o.setName('number').setDescription('Queue position to remove (see /queue)').setMinValue(1).setRequired(true));
+module.exports = {
+    data: new SlashCommandBuilder()
+        .setName('remove')
+        .setDescription('Removes a track from the queue by its position number.')
+        .addIntegerOption(option =>
+            option.setName('position')
+                .setDescription('Track position number to remove (1-based index).')
+                .setRequired(true)
+                .setMinValue(1)),
+    async execute(interaction) {
+        const { client } = interaction;
+        await ensureDeferred(interaction, { ephemeral: true });
 
-async function execute(interaction, ctx) {
-  const queue = ctx.player.nodes.get(interaction.guild.id);
-  if (!queue || queue.isEmpty()) return void (await interaction.reply({ content: 'The queue is empty — nothing to remove.', ephemeral: true }));
-  const n = interaction.options.getInteger('number', true);
-  if (n > queue.size) return void (await interaction.reply({ content: `The queue only has ${queue.size} songs — position ${n} does not exist.`, ephemeral: true }));
-  const track = queue.tracks.at(n - 1);
-  if (!track) return void (await interaction.reply({ content: 'Could not find that track.', ephemeral: true }));
-  queue.removeTrack(track);
-  await interaction.reply(`Removed **${track.title}** from the queue 🗑️`);
-}
+        try {
+            const player = await requirePlayer(interaction);
+            if (!player) return;
 
-module.exports = { data, execute };
+            const position = interaction.options.getInteger('position');
+            const queueTracks = player.queue?.tracks || [];
+
+            if (queueTracks.length === 0) {
+                return await safeReply(interaction, {
+                    embeds: [createActionEmbed('warning', 'Queue Empty', 'The queue has no upcoming songs to remove.')],
+                    flags: MessageFlags.Ephemeral
+                });
+            }
+
+            if (position > queueTracks.length) {
+                return await safeReply(interaction, {
+                    embeds: [createActionEmbed('warning', 'Position Out of Bounds', `Position \`${position}\` exceeds queue size (\`${queueTracks.length}\`).`)],
+                    flags: MessageFlags.Ephemeral
+                });
+            }
+
+            const [removedTrack] = queueTracks.splice(position - 1, 1);
+            if (!removedTrack) {
+                return await safeReply(interaction, {
+                    embeds: [createActionEmbed('error', 'Remove Failed', 'Track could not be removed.')],
+                    flags: MessageFlags.Ephemeral
+                });
+            }
+
+            logger.cmd(`/remove ${position} in guild ${interaction.guildId}`);
+
+            if (typeof client.playerController?.updatePlayer === 'function') {
+                client.playerController.updatePlayer(interaction.guildId, { replace: false }).catch(() => {});
+            }
+
+            return await safeReply(interaction, {
+                embeds: [createActionEmbed('success', 'Track Removed', `Removed **${removedTrack.info?.title || 'Unknown Title'}** (#${position}) from the queue.`)],
+                flags: MessageFlags.Ephemeral
+            });
+        } catch (error) {
+            logger.error(`Error in /remove command:`, error?.stack || error);
+            return await safeReply(interaction, {
+                embeds: [createActionEmbed('error', 'Remove Error', 'An unexpected error occurred while removing track.')],
+                flags: MessageFlags.Ephemeral
+            });
+        }
+    },
+};

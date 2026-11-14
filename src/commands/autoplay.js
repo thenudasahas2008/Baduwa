@@ -1,48 +1,70 @@
-// /autoplay — toggle endless music: when the queue runs out the bot keeps
-// suggesting and playing similar songs automatically.
-const { SlashCommandBuilder, InteractionContextType, ApplicationIntegrationType, EmbedBuilder } = require('discord.js');
-const { trackBaseEmbed } = require('../bot/ui');
-const { baseQueueOptions } = require('../bot/music');
+const { SlashCommandBuilder, MessageFlags } = require('discord.js');
+const { schedulePlayerUpdate } = require('../utils/playerLifecycle');
+const { createActionEmbed } = require('../utils/zyroEmbeds');
+const { ensureDeferred, requirePlayer, safeReply } = require('../utils/interactionHelpers');
+const logger = require('../utils/logger');
 
-const data = new SlashCommandBuilder()
-  .setName('autoplay')
-  .setDescription('Toggle autoplay — keep playing similar songs forever when the queue ends')
-  .setContexts(InteractionContextType.Guild)
-  .setIntegrationTypes(ApplicationIntegrationType.GuildInstall);
+module.exports = {
+    data: new SlashCommandBuilder()
+        .setName('autoplay')
+        .setDescription('Toggle autoplay mode to automatically play related songs.'),
+    async execute(interaction) {
+        const { client } = interaction;
 
-async function execute(interaction, ctx) {
-  const guildId = interaction.guild.id;
-  const on = !ctx.store.flags(guildId).autoplay;
-  ctx.store.setFlag(guildId, 'autoplay', on);
+        await ensureDeferred(interaction, { ephemeral: true });
 
-  let queue = ctx.player.nodes.get(guildId);
-  if (on && !queue) {
-    const member = interaction.member;
-    const vc = member && member.voice && member.voice.channel;
-    if (vc) {
-      queue = ctx.player.nodes.create(interaction.guild, baseQueueOptions(guildId, interaction.channel));
-      await queue.connect(vc).catch(() => {});
-    }
-  }
-  if (queue) ctx.music.applyFlagsToQueue(queue);
+        try {
+            const player = await requirePlayer(interaction);
+            if (!player) return;
 
-  if (on && queue && !queue.isPlaying() && queue.isEmpty()) {
-    const kicked = await ctx.music.kickAutoplay(queue).catch(() => false);
-    if (kicked) {
-      const t = queue.currentTrack;
-      return void (await interaction.reply({
-        embeds: [
-          trackBaseEmbed(t).setDescription('**Autoplay on** — picked up from history and started playing similar music 🎵'),
-        ],
-      }));
-    }
-  }
+            const channelName = interaction.channel?.name || interaction.channelId || 'unknown-channel';
+            const guildName = interaction.guild?.name || interaction.guildId || 'unknown-guild';
+            const userTag = interaction.user?.tag || interaction.user?.id || 'unknown-user';
+            logger.cmd(`/autoplay by ${userTag} in #${channelName} (Guild: ${guildName})`);
 
-  await interaction.reply(
-    on
-      ? 'Autoplay **ON** ♾️ — when the queue runs out, the bot automatically finds and plays similar songs forever.\nTip: turn on `/247` too and the bot becomes a non-stop radio!'
-      : 'Autoplay **off** — music stops when the queue runs out.'
-  );
-}
+            const guildId = interaction.guild.id;
+            const newState = !client.autoplayEnabled.get(guildId);
+            client.autoplayEnabled.set(guildId, newState);
 
-module.exports = { data, execute };
+            // When enabling autoplay, reset loop mode (DJ mode takes over)
+            if (newState && player.repeatMode !== 'off') {
+                player.setRepeatMode('off');
+            }
+
+            // If enabling autoplay while player is idle, trigger discovery immediately
+            if (newState && !player.queue.current && !player.playing && player.queue.tracks.length === 0) {
+                const { handleAutoplay } = require('../utils/autoplay');
+                const lastTrack = (typeof player.getData === 'function' ? player.getData('lastPlayedTrack') : null)
+                    || (player.queue?.previous?.length ? player.queue.previous[0] : null);
+                handleAutoplay(client, player, 'command', lastTrack).then((started) => {
+                    if (started) {
+                        schedulePlayerUpdate(client, guildId, 100, { replace: true, channelId: interaction.channel?.id });
+                    }
+                }).catch(() => {});
+            }
+
+            schedulePlayerUpdate(client, guildId, 50, { replace: false, channelId: interaction.channel?.id });
+
+            const autoEmbed = createActionEmbed(
+                'info',
+                newState ? 'Autoplay Enabled' : 'Autoplay Disabled',
+                newState
+                    ? 'ZYRO will automatically discover and queue related tracks when the queue runs out.'
+                    : 'Autoplay has been turned off.'
+            );
+
+            return safeReply(interaction, {
+                embeds: [autoEmbed],
+                flags: MessageFlags.Ephemeral,
+            });
+        } catch (error) {
+            if (error.code === 10062) {
+                logger.warn(`Interaction expired before reply could be delivered (/autoplay, guild: ${interaction.guildId || 'DM'})`);
+                return;
+            }
+            logger.error('Error executing /autoplay command:', error);
+            const errorEmbed = createActionEmbed('error', 'Error Toggling Autoplay', 'An unexpected error occurred while toggling autoplay.');
+            return safeReply(interaction, { embeds: [errorEmbed], flags: MessageFlags.Ephemeral });
+        }
+    },
+};

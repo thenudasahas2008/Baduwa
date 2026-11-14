@@ -1,19 +1,42 @@
-// /volume — set playback volume (0-150)
-const { SlashCommandBuilder, InteractionContextType, ApplicationIntegrationType } = require('discord.js');
+const { SlashCommandBuilder, MessageFlags } = require('discord.js');
+const { requirePlayer, safeReply, ensureDeferred } = require('../utils/interactionHelpers');
+const { schedulePlayerUpdate } = require('../utils/playerLifecycle');
+const logger = require('../utils/logger');
 
-const data = new SlashCommandBuilder()
-  .setName('volume')
-  .setDescription('Set the music volume')
-  .setContexts(InteractionContextType.Guild)
-  .setIntegrationTypes(ApplicationIntegrationType.GuildInstall)
-  .addIntegerOption((o) => o.setName('value').setDescription('Volume (0-150, default 100)').setMinValue(0).setMaxValue(150).setRequired(true));
+module.exports = {
+    data: new SlashCommandBuilder()
+        .setName('volume')
+        .setDescription('Adjusts the playback volume.')
+        .addIntegerOption(option =>
+            option.setName('level')
+                .setDescription('Volume level (1-100)')
+                .setRequired(true)
+                .setMinValue(1)
+                .setMaxValue(100)),
+    async execute(interaction) {
+        const { client, options } = interaction;
 
-async function execute(interaction, ctx) {
-  const queue = ctx.player.nodes.get(interaction.guild.id);
-  if (!queue) return void (await interaction.reply({ content: 'There is no queue here yet.', ephemeral: true }));
-  const value = interaction.options.getInteger('value', true);
-  queue.node.setVolume(value);
-  await interaction.reply(`Volume set to **${value}%** ${value > 100 ? '🔊 (careful with those ears!)' : '🔉'}`);
-}
+        await ensureDeferred(interaction, { ephemeral: true });
 
-module.exports = { data, execute };
+        const player = await requirePlayer(interaction);
+        if (!player) return;
+
+        const volume = options.getInteger('level');
+
+        const channelName = interaction.channel?.name || interaction.channelId || 'unknown-channel';
+        const guildName = interaction.guild?.name || interaction.guildId || 'unknown-guild';
+        const userTag = interaction.user?.tag || interaction.user?.id || 'unknown-user';
+        logger.cmd(`/volume ${volume} by ${userTag} in #${channelName} (Guild: ${guildName})`);
+
+        // Set the volume
+        player.setVolume(volume);
+
+        // Update the player display in-place
+        schedulePlayerUpdate(client, interaction.guild.id, 50, { replace: false, channelId: interaction.channel?.id });
+
+        return safeReply(interaction, {
+            content: client.languageManager.get(client.defaultLanguage, 'VOLUME_SET', volume),
+            flags: MessageFlags.Ephemeral
+        });
+    },
+};

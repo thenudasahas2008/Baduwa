@@ -1,19 +1,63 @@
-// /resume — resume paused playback
-const { SlashCommandBuilder, InteractionContextType, ApplicationIntegrationType } = require('discord.js');
+const { SlashCommandBuilder, MessageFlags } = require('discord.js');
+const { requirePlayer, safeReply, ensureDeferred } = require('../utils/interactionHelpers');
+const { createActionEmbed } = require('../utils/zyroEmbeds');
+const { schedulePlayerUpdate } = require('../utils/playerLifecycle');
+const logger = require('../utils/logger');
 
-const data = new SlashCommandBuilder()
-  .setName('resume')
-  .setDescription('Resume playback')
-  .setContexts(InteractionContextType.Guild)
-  .setIntegrationTypes(ApplicationIntegrationType.GuildInstall);
+module.exports = {
+    data: new SlashCommandBuilder()
+        .setName('resume')
+        .setDescription('Resumes paused music playback.'),
+    async execute(interaction) {
+        const { client } = interaction;
 
-async function execute(interaction, ctx) {
-  const queue = ctx.player.nodes.get(interaction.guild.id);
-  if (!queue || !queue.node.isPaused()) {
-    return void (await interaction.reply({ content: 'Playback is not paused.', ephemeral: true }));
-  }
-  queue.node.resume();
-  await interaction.reply('Resumed ▶️');
-}
+        await ensureDeferred(interaction, { ephemeral: true });
 
-module.exports = { data, execute };
+        try {
+            const player = await requirePlayer(interaction);
+            if (!player) return;
+
+            const channelName = interaction.channel?.name || interaction.channelId || 'unknown-channel';
+            const guildName = interaction.guild?.name || interaction.guildId || 'unknown-guild';
+            const userTag = interaction.user?.tag || interaction.user?.id || 'unknown-user';
+
+            logger.cmd(`/resume by ${userTag} in #${channelName} (Guild: ${guildName})`);
+
+            if (!player.paused) {
+                const infoEmbed = createActionEmbed('info', 'Playback Already Active', 'Music playback is not paused.');
+                return await safeReply(interaction, {
+                    embeds: [infoEmbed],
+                    flags: MessageFlags.Ephemeral
+                });
+            }
+
+            try {
+                await Promise.race([
+                    player.resume(),
+                    new Promise((_, reject) => setTimeout(() => reject(new Error('Resume timed out')), 3000))
+                ]);
+            } catch (err) {
+                if (!err?.message?.includes("isn't paused")) {
+                    logger.warn(`Failed to resume player in guild ${interaction.guildId}:`, err?.message || err);
+                }
+            }
+            player.paused = false;
+
+            schedulePlayerUpdate(client, interaction.guild.id, 50, { replace: false, channelId: interaction.channel?.id });
+            client.voiceChannelStatusManager?.updateFromPlayer(player, player.queue?.current, 'playing').catch(() => {});
+
+            const resumeEmbed = createActionEmbed('success', 'Playback Resumed', 'Music playback has resumed.');
+            return await safeReply(interaction, {
+                embeds: [resumeEmbed],
+                flags: MessageFlags.Ephemeral
+            });
+        } catch (error) {
+            logger.error(`Error executing /resume in guild ${interaction.guildId || 'unknown'}:`, error?.stack || error);
+            const errEmbed = createActionEmbed('error', 'Resume Failed', 'An unexpected error occurred while resuming playback.');
+            return await safeReply(interaction, {
+                embeds: [errEmbed],
+                flags: MessageFlags.Ephemeral
+            });
+        }
+    },
+};

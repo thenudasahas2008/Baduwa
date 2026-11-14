@@ -1,18 +1,88 @@
-// /clear — remove everything from the queue (keeps the current song playing)
-const { SlashCommandBuilder, InteractionContextType, ApplicationIntegrationType } = require('discord.js');
+const { SlashCommandBuilder, MessageFlags } = require('discord.js');
+const { isLavalinkAvailable, safeReply, ensureDeferred } = require('../utils/interactionHelpers');
+const { clearQueue } = require('../utils/PlayerActions');
+const { schedulePlayerUpdate } = require('../utils/playerLifecycle');
+const { createActionEmbed } = require('../utils/zyroEmbeds');
+const logger = require('../utils/logger');
 
-const data = new SlashCommandBuilder()
-  .setName('clear')
-  .setDescription('Clear all queued songs (the current song keeps playing)')
-  .setContexts(InteractionContextType.Guild)
-  .setIntegrationTypes(ApplicationIntegrationType.GuildInstall);
+module.exports = {
+    data: new SlashCommandBuilder()
+        .setName('clear')
+        .setDescription('Clears all upcoming tracks from the queue.'),
+    async execute(interaction) {
+        const { client, guild, member, channel } = interaction;
 
-async function execute(interaction, ctx) {
-  const queue = ctx.player.nodes.get(interaction.guild.id);
-  if (!queue || queue.isEmpty()) return void (await interaction.reply({ content: 'The queue is already empty.', ephemeral: true }));
-  const count = queue.size;
-  queue.clear();
-  await interaction.reply(`Cleared **${count}** songs from the queue 🧹`);
-}
+        await ensureDeferred(interaction, { ephemeral: true });
 
-module.exports = { data, execute };
+        const channelName = channel?.name || interaction.channelId || 'unknown-channel';
+        const guildName = guild?.name || interaction.guildId || 'unknown-guild';
+        const guildId = interaction.guildId || guild?.id;
+        const userTag = interaction.user?.tag || interaction.user?.id || 'unknown-user';
+
+        try {
+            // Check if Lavalink is available
+            if (typeof isLavalinkAvailable === 'function' && !isLavalinkAvailable(client)) {
+                return await safeReply(interaction, {
+                    embeds: [createActionEmbed('warning', 'Music Service Reconnecting', 'Music service is reconnecting; please try again shortly.')],
+                    flags: MessageFlags.Ephemeral,
+                });
+            }
+
+            const player = client.lavalink?.getPlayer(guildId);
+            if (!player || (!player.queue?.current && (!player.queue?.tracks || player.queue.tracks.length === 0))) {
+                return await safeReply(interaction, {
+                    embeds: [createActionEmbed('info', 'Nothing Playing', 'ZYRO is not currently playing any track.')],
+                    flags: MessageFlags.Ephemeral,
+                });
+            }
+
+            const voiceChannel = member?.voice?.channel;
+            if (!voiceChannel) {
+                return await safeReply(interaction, {
+                    embeds: [createActionEmbed('warning', 'Voice Channel Required', 'You must be in a voice channel to clear the queue.')],
+                    flags: MessageFlags.Ephemeral,
+                });
+            }
+
+            if (player.voiceChannelId && player.voiceChannelId !== voiceChannel.id) {
+                return await safeReply(interaction, {
+                    embeds: [createActionEmbed('warning', 'Different Voice Channel', 'You need to be in the same voice channel as ZYRO.')],
+                    flags: MessageFlags.Ephemeral,
+                });
+            }
+
+            if (client.autoplayEnabled?.get(guildId)) {
+                return await safeReply(interaction, {
+                    embeds: [createActionEmbed('warning', 'Autoplay Active', 'Cannot clear the queue while Autoplay is actively managing tracks.')],
+                    flags: MessageFlags.Ephemeral,
+                });
+            }
+
+            if (!player.queue?.tracks || player.queue.tracks.length === 0) {
+                return await safeReply(interaction, {
+                    embeds: [createActionEmbed('info', 'Queue Empty', 'The queue is already empty.')],
+                    flags: MessageFlags.Ephemeral,
+                });
+            }
+
+            const clearedCount = player.queue.tracks.length;
+            clearQueue(player);
+
+            // Update persistent player UI
+            schedulePlayerUpdate(client, guildId, 50, { replace: false, channelId: interaction.channel?.id });
+
+            logger.cmd(`/clear (${clearedCount} tracks) by ${userTag} in #${channelName} (Guild: ${guildName})`);
+
+            return await safeReply(interaction, {
+                embeds: [createActionEmbed('success', 'Queue Cleared', `Successfully removed **${clearedCount}** upcoming track${clearedCount === 1 ? '' : 's'} from the queue.`)],
+                flags: MessageFlags.Ephemeral,
+            });
+        } catch (error) {
+            logger.error(`Error executing /clear in guild ${guildId}:`, error?.stack || error);
+            return await safeReply(interaction, {
+                embeds: [createActionEmbed('error', 'Clear Failed', 'An unexpected error occurred while clearing the queue.')],
+                flags: MessageFlags.Ephemeral,
+            });
+        }
+    },
+};

@@ -1,55 +1,44 @@
-// /queue — show the queue (upcoming + history)
-const { SlashCommandBuilder, InteractionContextType, ApplicationIntegrationType, EmbedBuilder } = require('discord.js');
-const { fmtDuration } = require('../bot/ui');
+const { SlashCommandBuilder, MessageFlags } = require('discord.js');
+const { ensureDeferred, requirePlayer, safeReply } = require('../utils/interactionHelpers');
+const { createPaginatedQueueResponse } = require('../utils/PlayerActions');
+const { createActionEmbed } = require('../utils/zyroEmbeds');
+const logger = require('../utils/logger');
 
-const data = new SlashCommandBuilder()
-  .setName('queue')
-  .setDescription('Show the current queue')
-  .setContexts(InteractionContextType.Guild)
-  .setIntegrationTypes(ApplicationIntegrationType.GuildInstall)
-  .addStringOption((o) =>
-    o
-      .setName('view')
-      .setDescription('Which part of the queue to show')
-      .addChoices({ name: 'Up next', value: 'next' }, { name: 'History', value: 'history' })
-  );
+module.exports = {
+    data: new SlashCommandBuilder()
+        .setName('queue')
+        .setDescription('Displays the song queue.'),
+    async execute(interaction) {
+        const { client } = interaction;
 
-function line(i, t) {
-  const dur = t.durationMS ? fmtDuration(t.durationMS) : t.duration || 'live';
-  return `**${i}.** [${(t.title || 'Unknown').slice(0, 60)}](${t.url || ''}) • ${dur} • ${t.requestedBy ? `<@${t.requestedBy.id}>` : 'autoplay'}`;
-}
+        await ensureDeferred(interaction, { ephemeral: true });
 
-async function execute(interaction, ctx) {
-  const queue = ctx.player.nodes.get(interaction.guild.id);
-  if (!queue) return void (await interaction.reply({ content: 'The queue is empty — start something with `/play`!', ephemeral: true }));
+        try {
+            const player = await requirePlayer(interaction, { requireQueue: false });
+            if (!player) return;
 
-  const view = interaction.options.getString('view') || 'next';
-  const embed = new EmbedBuilder().setColor(0x1db954).setTitle(`Queue — ${interaction.guild.name}`);
-  const f = ctx.store.flags(interaction.guild.id);
-  embed.setDescription(`Autoplay: ${f.autoplay ? '✅ on' : 'off'} • 24/7 mode: ${f.twenty4seven ? '✅ on' : 'off'}`);
+            const channelName = interaction.channel?.name || interaction.channelId || 'unknown-channel';
+            const guildName = interaction.guild?.name || interaction.guildId || 'unknown-guild';
+            const userTag = interaction.user?.tag || interaction.user?.id || 'unknown-user';
 
-  if (view === 'history') {
-    const hist = queue.history.tracks.toArray().reverse().slice(0, 12);
-    if (!hist.length) return void (await interaction.reply({ content: 'History is empty.', ephemeral: true }));
-    embed.setTitle('Recently played');
-    embed.setDescription(hist.map((t, idx) => line(idx + 1, t)).join('\n'));
-    embed.setFooter({ text: `Total history size: ${queue.history.size}` });
-    return void (await interaction.reply({ embeds: [embed] }));
-  }
+            logger.cmd(`/queue by ${userTag} in #${channelName} (Guild: ${guildName})`);
 
-  if (queue.currentTrack) {
-    embed.addFields({ name: '▶ Now playing', value: line('•', queue.currentTrack).slice(0, 1024) });
-  }
-  const upcoming = queue.tracks.toArray().slice(0, 12);
-  if (upcoming.length) {
-    embed.addFields({ name: `⏭ Up next (${queue.size} total)`, value: upcoming.map((t, i) => line(i + 1, t)).join('\n').slice(0, 1024) });
-  } else if (!queue.currentTrack) {
-    return void (await interaction.reply({ content: 'The queue is empty — start something with `/play`!', ephemeral: true }));
-  } else {
-    embed.addFields({ name: '⏭ Up next', value: f.autoplay ? 'Autoplay will keep the music going 🎵' : 'Nothing queued — `/play` something!' });
-  }
-  embed.setFooter({ text: `Total queue duration: ${queue.durationFormatted}` });
-  await interaction.reply({ embeds: [embed] });
-}
+            const queueResponse = createPaginatedQueueResponse(client, player, 1);
+            await safeReply(interaction, queueResponse);
 
-module.exports = { data, execute };
+            if (typeof client.playerController?.replaceWithFullDashboard === 'function') {
+                client.playerController.replaceWithFullDashboard(interaction.guild.id, interaction.channel?.id, { reason: 'queue' }).catch((err) => {
+                    logger.warn(`Failed to refresh dashboard after /queue for guild ${interaction.guild.id}:`, err?.message || err);
+                });
+            }
+        } catch (error) {
+            if (error.code === 10062) {
+                logger.warn(`Interaction expired before reply could be delivered (/queue, guild: ${interaction.guildId || 'DM'})`);
+                return;
+            }
+            logger.error('Error executing /queue command:', error);
+            const errorEmbed = createActionEmbed('error', 'Error Viewing Queue', 'An unexpected error occurred while loading the queue.');
+            return await safeReply(interaction, { embeds: [errorEmbed], flags: MessageFlags.Ephemeral });
+        }
+    },
+};

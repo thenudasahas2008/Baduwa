@@ -1,34 +1,43 @@
 {
-  "name": "discord-music-bot",
-  "version": "1.0.0",
-  "description": "24/7 Discord music bot with autoplay, suggestions and rich in-Discord controls",
-  "main": "index.js",
-  "directories": {
-    "doc": "docs"
-  },
+  "name": "beatdock",
+  "version": "2.11.1",
+  "description": "A modern and efficient Discord music bot with slash commands, multi-language support, and Docker deployment.",
+  "main": "src/index.js",
   "scripts": {
-    "start": "node --max-old-space-size=400 index.js",
-    "dev": "node --watch index.js",
-    "test": "node scripts/test-boot.js && node scripts/test-panel.js && node scripts/test-vcstatus.js",
-    "test:extractors": "node scripts/test-extractors.js"
+    "start": "node src/index.js",
+    "test": "node scripts/test-autoplay.js && node scripts/test-resilience.js && node scripts/test-command-behavior.js && node scripts/test-lavalink-connection.js && node scripts/test-branding.js && node scripts/test-voice-status.js && node scripts/test-audio-playback.js && node scripts/test-play-urls.js && node scripts/test-performance-audit.js && node scripts/test-command-timeouts.js && node scripts/test-search-accuracy.js && node scripts/test-progress-and-seeking.js && node scripts/test-unknown-channel-and-247-recovery.js && node scripts/test-node-compatibility-and-audio-recovery.js && node scripts/test-autoplay-and-playback-stability.js && node scripts/test-performance-concurrency.js && node scripts/test-playback-restoration-and-dedup.js && node scripts/test-compact-player-ui.js && node scripts/test-command-performance-and-tokens.js && node scripts/test-play-lifecycle-and-concurrency.js && node scripts/test-handshake-and-v4-validation.js && node scripts/test-slash-interactions-and-dashboard-publishing.js && node scripts/test-production-emergency-master-fix.js && node scripts/test-stop-button-behavior.js && node scripts/test-timeout-cancellation-and-stalls.js && node scripts/test-final-audio-interruption-and-rest-timeout.js && node scripts/test-music-health-and-diagnostics.js && node scripts/test-critical-interaction-and-playback-lifecycle.js && node scripts/test-smart-autocomplete.js && node scripts/test-dashboard-button-state.js && node scripts/test-permanent-247-voice-connection.js && node scripts/test-audio-stutter-and-node-migration-repair.js && node scripts/test-new-music-commands.js && node scripts/test-247-command-and-interaction-finalization.js && node scripts/test-silent-playback-and-audio-delivery.js && node scripts/test-voice-handshake-and-gateway-synchronization.js",
+    "docker:build": "docker build -t beatdock:latest .",
+    "docker:up": "docker compose up -d",
+    "docker:down": "docker compose down",
+    "docker:update": "docker compose pull && docker compose up -d --force-recreate",
+    "docker:logs": "docker compose logs -f"
   },
+  "keywords": [
+    "discord",
+    "discord-bot",
+    "music",
+    "music-bot",
+    "bot",
+    "lavalink",
+    "youtube",
+    "spotify",
+    "docker",
+    "nodejs"
+  ],
+  "author": "Lázaro <lazaro98@duck.com>",
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/thenudasahas2008/BeatDock-ZYRO.git"
+  },
+  "homepage": "https://github.com/thenudasahas2008",
   "engines": {
     "node": ">=18"
   },
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
-  "type": "commonjs",
   "dependencies": {
-    "bgutils-js": "^4.0.3",
-    "discord-player": "^6.7.1",
-    "discord-player-youtubei": "^3.1.0",
-    "discord.js": "^14.28.1",
-    "dotenv": "^18.0.10",
-    "ffmpeg-static": "^5.3.0",
-    "googlevideo": "^4.1.1",
-    "simple-ytdl-core": "^1.2.2",
-    "undici": "^6.21.1",
-    "youtubei.js": "^18.3.0"
+    "discord.js": "^14.27.0",
+    "dotenv": "^17.4.2",
+    "lavalink-client": "^2.11.0",
+    "picocolors": "^1.1.1"
   }
 }

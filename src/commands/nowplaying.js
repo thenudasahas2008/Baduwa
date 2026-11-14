@@ -1,28 +1,47 @@
-// /nowplaying — show the song currently playing with the full ZYRO dashboard panel
-const {
-  SlashCommandBuilder,
-  InteractionContextType,
-  ApplicationIntegrationType,
-} = require('discord.js');
-const { buildPanel } = require('../bot/panel');
+const { SlashCommandBuilder, MessageFlags } = require('discord.js');
+const logger = require('../utils/logger');
 
-const data = new SlashCommandBuilder()
-  .setName('nowplaying')
-  .setDescription('Show what is playing right now')
-  .setContexts(InteractionContextType.Guild)
-  .setIntegrationTypes(ApplicationIntegrationType.GuildInstall);
+module.exports = {
+    data: new SlashCommandBuilder()
+        .setName('nowplaying')
+        .setDescription('Shows information about the currently playing song.'),
+    async execute(interaction) {
+        const { client } = interaction;
+        const { requirePlayer, safeReply } = require('../utils/interactionHelpers');
 
-async function execute(interaction, ctx) {
-  const queue = ctx.player.nodes.get(interaction.guild.id);
-  if (!queue || !queue.currentTrack) {
-    return void (await interaction.reply({
-      content: 'Nothing is playing right now. Use `/play` to start a song!',
-      ephemeral: true,
-    }));
-  }
+        const player = await requirePlayer(interaction);
+        if (!player) return;
 
-  const payload = buildPanel(queue, queue.currentTrack);
-  await interaction.reply(payload);
-}
+        const channelName = interaction.channel?.name || interaction.channelId || 'unknown-channel';
+        const guildName = interaction.guild?.name || interaction.guildId || 'unknown-guild';
+        const userTag = interaction.user?.tag || interaction.user?.id || 'unknown-user';
+        logger.cmd(`/nowplaying by ${userTag} in #${channelName} (Guild: ${guildName})`);
 
-module.exports = { data, execute };
+        if (!player.playing || !player.queue.current) {
+            return safeReply(interaction, {
+                content: client.languageManager.get(client.defaultLanguage, 'NOTHING_PLAYING'),
+                flags: MessageFlags.Ephemeral
+            });
+        }
+
+        const track = player.queue.current;
+
+        const embed = client.playerController.createPlayerEmbed(player, track);
+
+        // Add loop status to nowplaying
+        if (player.repeatMode && player.repeatMode !== 'off') {
+            const loopIcon = player.repeatMode === 'track' ? '🔂' : '🔁';
+            const loopText = player.repeatMode === 'track' 
+                ? client.languageManager.get(client.defaultLanguage, 'LOOP_STATUS_TRACK')
+                : client.languageManager.get(client.defaultLanguage, 'LOOP_STATUS_QUEUE');
+            
+            embed.addFields({
+                name: client.languageManager.get(client.defaultLanguage, 'LOOP_STATUS'),
+                value: `${loopIcon} ${loopText}`,
+                inline: true
+            });
+        }
+
+        return safeReply(interaction, { embeds: [embed], flags: MessageFlags.Ephemeral});
+    },
+}; 

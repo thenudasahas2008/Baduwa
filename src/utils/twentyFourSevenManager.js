@@ -51,6 +51,12 @@ class TwentyFourSevenManager {
     handleChannelMove(client, guildId, newChannelId) {
         this.cancelRecovery(guildId, 'channel_moved');
         if (client?.is247Enabled?.(guildId) && newChannelId) {
+            // Guard against recording an AFK channel as the 24/7 channel
+            const guild = client.guilds?.cache?.get(guildId);
+            if (guild?.afkChannelId && newChannelId === guild.afkChannelId) {
+                logger.warn(`[247-LIFECYCLE] Suppressed updating 24/7 channel to AFK channel (${newChannelId}) in guild ${guildId}`);
+                return;
+            }
             client.set247?.(guildId, true, { voiceChannelId: newChannelId });
             logger.debug(`[247-LIFECYCLE] Updated 24/7 designated channel to #${newChannelId} in guild ${guildId}`);
         }
@@ -72,6 +78,9 @@ class TwentyFourSevenManager {
         const existing = this.sessions.get(guildId);
         const nextGen = (existing?.generation || 0) + 1;
         const attempts = existing ? existing.attempts : 0;
+
+        const isNodeWaiting = reason === 'node_reconnecting' || reason === 'fetch_retry';
+        const nextAttempts = isNodeWaiting ? attempts : attempts + 1;
 
         if (attempts >= this.MAX_ATTEMPTS) {
             logger.warn(`[247-LIFECYCLE] Max recovery attempts (${this.MAX_ATTEMPTS}) reached for guild ${guildId}. Aborting auto-recovery to prevent infinite loop.`);
@@ -103,7 +112,7 @@ class TwentyFourSevenManager {
             generation: nextGen,
             timer,
             inFlight: false,
-            attempts: attempts + 1,
+            attempts: nextAttempts,
             savedState,
             targetChannelId: oldChannelId,
         });
@@ -329,11 +338,19 @@ class TwentyFourSevenManager {
                     const botMember = guild.members?.me
                         || (typeof guild.members?.fetch === 'function' ? await guild.members.fetch(client.user?.id).catch(() => null) : null);
 
-                    const isConnected = botMember?.voice?.channelId === voiceChannelId;
-                    if (!isConnected) {
+                    const isVoiceConnected = Boolean(botMember?.voice?.channelId === voiceChannelId);
+                    const player = client.lavalink?.getPlayer?.(guildId);
+                    const isPlayerConnected = Boolean(player && player.connected && player.node?.connected);
+
+                    if (!isVoiceConnected) {
                         logger.info(`[247-WATCHDOG] Bot disconnected from 24/7 channel #${voiceChannelId} in guild ${guild.name || guildId}. Auto-rejoining...`);
                         this.sessions.delete(guildId);
                         this.scheduleAutoRecovery(client, guildId, voiceChannelId, 'watchdog_disconnect_detected');
+                    } else if (player && !isPlayerConnected && player.node?.connected) {
+                        logger.info(`[247-WATCHDOG] Lavalink player disconnected from voice in guild ${guild.name || guildId} while bot is in channel. Re-connecting player...`);
+                        player.connect().catch((pErr) => {
+                            logger.debug(`[247-WATCHDOG] Re-connect player caught:`, pErr?.message || pErr);
+                        });
                     }
                 } catch (checkErr) {
                     logger.debug(`[247-WATCHDOG] Check error for guild ${guildId}:`, checkErr?.message || checkErr);

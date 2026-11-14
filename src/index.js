@@ -744,9 +744,10 @@ keepAliveServer.listen(port, () => {
     logger.info(`[http] Keep-alive server listening on port ${port}`);
 
     // Self-ping keepalive mechanism for Render Free Tier (prevents 15-minute idle spindown)
-    const externalUrl = process.env.RENDER_EXTERNAL_URL;
+    const externalUrl = process.env.RENDER_EXTERNAL_URL
+        || (process.env.RENDER_SERVICE_NAME ? `https://${process.env.RENDER_SERVICE_NAME}.onrender.com` : null);
     if (externalUrl) {
-        logger.info(`[http] Render external URL detected: ${externalUrl}. Starting self-ping keep-alive (every 7 minutes)...`);
+        logger.info(`[http] Render external URL detected: ${externalUrl}. Starting self-ping keep-alive (every 4 minutes)...`);
         const pingInterval = setInterval(() => {
             const clientModule = externalUrl.startsWith('https') ? require('node:https') : require('node:http');
             clientModule.get(externalUrl, (resp) => {
@@ -754,10 +755,12 @@ keepAliveServer.listen(port, () => {
             }).on('error', (err) => {
                 logger.debug('[http] Self-ping ping error:', err?.message || err);
             });
-        }, 7 * 60 * 1000);
+        }, 4 * 60 * 1000);
         if (typeof pingInterval.unref === 'function') {
             pingInterval.unref();
         }
+    } else {
+        logger.warn('[http] No RENDER_EXTERNAL_URL or RENDER_SERVICE_NAME set; self-ping keep-alive is inactive.');
     }
 });
 

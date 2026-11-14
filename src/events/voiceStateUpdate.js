@@ -159,6 +159,20 @@ module.exports = {
                 const guildId = newState.guild.id;
                 clearEmptyChannelTimeout(guildId);
 
+                // Anti-AFK guard for 24/7: if Discord auto-moved the bot to the server's AFK channel, return immediately
+                if (client.is247Enabled?.(guildId) && newState.guild?.afkChannelId && newState.channelId === newState.guild.afkChannelId) {
+                    logger.info(`[247-LIFECYCLE] Discord moved bot to AFK channel in guild ${guildId}. Returning to 24/7 channel #${oldState.channelId}...`);
+                    const player = client.lavalink?.getPlayer?.(guildId);
+                    if (player) {
+                        player.voiceChannelId = oldState.channelId;
+                        if (player.options) player.options.voiceChannelId = oldState.channelId;
+                        player.connect().catch((err) => {
+                            logger.debug(`[247-LIFECYCLE] Return from AFK channel caught:`, err?.message || err);
+                        });
+                    }
+                    return;
+                }
+
                 // Synchronize 24/7 designated voice channel and cancel any pending recovery for old channel
                 twentyFourSevenManager.handleChannelMove(client, guildId, newState.channelId);
 

@@ -499,8 +499,9 @@ class AudioPlaybackMonitor {
             return;
         }
 
-        // 4015: Voice server crashed / disconnected unexpectedly; 1006 / 4006: Session invalid
-        if ([4015, 1006, 4006].includes(code) && (player.playing || this.client?.is247Enabled?.(player.guildId))) {
+        // 4006 / 4009 / 4014 / 4015: Session invalid, timeout, voice server changed/crashed; 1000 / 1006: Socket closed
+        const reconnectableCodes = [4006, 4009, 4014, 4015, 1000, 1001, 1006];
+        if (reconnectableCodes.includes(code) && (player.playing || this.client?.is247Enabled?.(player.guildId))) {
             logger.info(`Reconnecting Discord voice for guild ${player.guildId} after voice socket closed (${code})...`);
             try {
                 await player.connect();

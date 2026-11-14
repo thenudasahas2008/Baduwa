@@ -1,4 +1,4 @@
-# 🎧 24/7 Discord Music Bot (ZYRO-Style Controls)
+# 🎧 24/7 Discord Music Bot
 
 A full-featured Discord music bot built with **discord.js v14**, **discord-player v6**, and **discord-player-youtubei v3**.
 

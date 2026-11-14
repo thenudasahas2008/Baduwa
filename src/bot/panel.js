@@ -16,8 +16,7 @@ const panelState = new Map();
 /** guildId -> setInterval handle */
 const progressIntervals = new Map();
 
-const EDIT_WINDOW_MS = 15 * 60 * 1000; // 15 minutes
-const PROGRESS_BAR_SIZE = 9; // 4 bars + marker + 4 bars = "▬▬▬▬●▬▬▬▬"
+const PROGRESS_BAR_SIZE = 12; // Continuous smooth line with marker
 
 function fmtDuration(ms) {
   if (!ms || ms < 0 || !Number.isFinite(ms)) return '0:00';
@@ -36,21 +35,23 @@ function clampVolume(val) {
   return Math.max(0, Math.min(150, Math.round(n)));
 }
 
+/**
+ * Creates a smooth, continuous progress bar using box-drawing line '─' and blue circle '🔵'
+ * Example: "──🔵─────────"
+ */
 function createProgressBar(currentMS, totalMS, size = PROGRESS_BAR_SIZE) {
   const current = Math.max(0, Number(currentMS) || 0);
   const total = Math.max(0, Number(totalMS) || 0);
-  const totalStr = total > 0 ? fmtDuration(total) : 'live';
-  const currentStr = fmtDuration(current);
 
-  const numBars = Math.max(2, size - 1);
+  const numBars = Math.max(2, size);
   if (!total || total <= 0) {
-    return `🔘${'▬'.repeat(numBars)} ${currentStr} / ${totalStr}`;
+    return '🔵' + '─'.repeat(numBars);
   }
 
   const ratio = Math.max(0, Math.min(1, current / total));
   const pos = Math.round(ratio * numBars);
-  const bar = '▬'.repeat(pos) + '●' + '▬'.repeat(numBars - pos);
-  return `${bar} ${currentStr} / ${totalStr}`;
+  const bar = '─'.repeat(pos) + '🔵' + '─'.repeat(Math.max(0, numBars - pos));
+  return bar;
 }
 
 function getLoopModeLabel(mode) {
@@ -66,6 +67,13 @@ function getNextLoopMode(currentMode) {
   return 0;
 }
 
+/**
+ * Build 4 action rows matching the ZYRO dashboard layout:
+ * Row 1: Pause/Resume (Primary), Skip (Secondary), Shuffle (Secondary)
+ * Row 2: Stop (Danger)
+ * Row 3: Previous (Secondary), Autoplay (Success when on / Secondary when off), Queue (Secondary)
+ * Row 4: Loop (Secondary), Vol+ (Secondary), Vol- (Secondary)
+ */
 function buildPanelButtons(options = {}) {
   const {
     isPaused = false,
@@ -76,31 +84,19 @@ function buildPanelButtons(options = {}) {
 
   const loopLabel = getLoopModeLabel(loopMode);
 
-  // Row 1: Pause/Resume, Skip, Previous, Stop, Shuffle
+  // Row 1: Pause/Resume, Skip, Shuffle
   const row1 = new ActionRowBuilder().addComponents(
     new ButtonBuilder()
       .setCustomId('panel_pause')
       .setLabel(isPaused ? 'Resume' : 'Pause')
-      .setEmoji(isPaused ? '▶️' : '⏸️')
-      .setStyle(isPaused ? ButtonStyle.Success : ButtonStyle.Secondary)
+      .setEmoji(isPaused ? '▶' : '⏸')
+      .setStyle(isPaused ? ButtonStyle.Success : ButtonStyle.Primary)
       .setDisabled(disabled),
     new ButtonBuilder()
       .setCustomId('panel_skip')
       .setLabel('Skip')
-      .setEmoji('⏭️')
+      .setEmoji('⏭')
       .setStyle(ButtonStyle.Secondary)
-      .setDisabled(disabled),
-    new ButtonBuilder()
-      .setCustomId('panel_previous')
-      .setLabel('Previous')
-      .setEmoji('⏮️')
-      .setStyle(ButtonStyle.Secondary)
-      .setDisabled(disabled),
-    new ButtonBuilder()
-      .setCustomId('panel_stop')
-      .setLabel('Stop')
-      .setEmoji('⏹️')
-      .setStyle(ButtonStyle.Danger)
       .setDisabled(disabled),
     new ButtonBuilder()
       .setCustomId('panel_shuffle')
@@ -110,24 +106,44 @@ function buildPanelButtons(options = {}) {
       .setDisabled(disabled)
   );
 
-  // Row 2: Autoplay, Loop, Queue, Vol+, Vol-
+  // Row 2: Stop
   const row2 = new ActionRowBuilder().addComponents(
+    new ButtonBuilder()
+      .setCustomId('panel_stop')
+      .setLabel('Stop')
+      .setEmoji('⏹')
+      .setStyle(ButtonStyle.Danger)
+      .setDisabled(disabled)
+  );
+
+  // Row 3: Previous, Autoplay, Queue
+  const row3 = new ActionRowBuilder().addComponents(
+    new ButtonBuilder()
+      .setCustomId('panel_previous')
+      .setLabel('Previous')
+      .setEmoji('⏮')
+      .setStyle(ButtonStyle.Secondary)
+      .setDisabled(disabled),
     new ButtonBuilder()
       .setCustomId('panel_autoplay')
       .setLabel('Autoplay')
-      .setEmoji('🔮')
+      .setEmoji('📻')
       .setStyle(autoplay ? ButtonStyle.Success : ButtonStyle.Secondary)
-      .setDisabled(false), // Autoplay remains enabled even in standby
-    new ButtonBuilder()
-      .setCustomId('panel_loop')
-      .setLabel(`Loop: ${loopLabel}`)
-      .setEmoji('🔁')
-      .setStyle(ButtonStyle.Secondary)
-      .setDisabled(disabled),
+      .setDisabled(false), // Autoplay can be toggled even in standby
     new ButtonBuilder()
       .setCustomId('panel_queue')
       .setLabel('Queue')
       .setEmoji('📜')
+      .setStyle(ButtonStyle.Secondary)
+      .setDisabled(disabled)
+  );
+
+  // Row 4: Loop, Vol+, Vol-
+  const row4 = new ActionRowBuilder().addComponents(
+    new ButtonBuilder()
+      .setCustomId('panel_loop')
+      .setLabel(`Loop: ${loopLabel}`)
+      .setEmoji('🔁')
       .setStyle(ButtonStyle.Secondary)
       .setDisabled(disabled),
     new ButtonBuilder()
@@ -144,7 +160,7 @@ function buildPanelButtons(options = {}) {
       .setDisabled(disabled)
   );
 
-  return [row1, row2];
+  return [row1, row2, row3, row4];
 }
 
 function buildPanel(queue, currentTrack = null) {
@@ -152,29 +168,30 @@ function buildPanel(queue, currentTrack = null) {
   const guildId = queue?.guild?.id;
   const flags = guildId ? store.flags(guildId) : { autoplay: false, twenty4seven: false };
   const botUser = queue?.client?.user || { username: 'Baduwa' };
+  const botAvatar = typeof botUser.displayAvatarURL === 'function' ? botUser.displayAvatarURL() : null;
   const volume = queue?.node?.volume !== undefined ? queue.node.volume : 100;
   const queueSize = queue?.tracks?.size ?? queue?.size ?? 0;
   const is247 = Boolean(flags.twenty4seven);
   const isAutoplay = Boolean(flags.autoplay || queue?.repeatMode === 3);
   const isPaused = queue?.node?.isPaused ? queue.node.isPaused() : false;
   const repeatMode = queue?.repeatMode ?? 0;
+  const loopLabel = getLoopModeLabel(repeatMode);
 
   if (!track) {
-    // Standby embed
+    // Standby embed (sleek ZYRO purple theme)
     const embed = new EmbedBuilder()
-      .setColor(0x5865f2)
+      .setColor(0x7b2cbf)
+      .setAuthor({
+        name: `🎵 ${botUser.username.toUpperCase()} • STANDBY`,
+        iconURL: botAvatar,
+      })
       .setTitle('💤 Standby Mode')
       .setDescription(
-        'Queue finished! Use `/play` to drop a song — or turn on **Autoplay** to keep music flowing automatically.'
-      )
-      .addFields(
-        { name: 'Volume', value: `${volume}%`, inline: true },
-        { name: 'Queue', value: `${queueSize}`, inline: true },
-        { name: 'Loop', value: getLoopModeLabel(repeatMode), inline: true },
-        { name: 'Autoplay Radio', value: isAutoplay ? 'On' : 'Off', inline: true }
+        'Queue finished! Use `/play` to drop a song — or click **Autoplay** below to keep music flowing automatically.\n\n' +
+        `🔊 \`${volume}%\` • 📜 \`0\` in queue • Loop: \`Off\` • 👤📻 Autoplay Radio`
       )
       .setFooter({
-        text: `${botUser.username} Music • 24/7 mode ${is247 ? 'active' : 'inactive'}`,
+        text: `${botUser.username} Music • 24/7 Mode ${is247 ? 'Active' : 'Inactive'}`,
       })
       .setTimestamp();
 
@@ -188,36 +205,39 @@ function buildPanel(queue, currentTrack = null) {
     return { embeds: [embed], components };
   }
 
-  // Active playing embed
+  // Active playing embed matching ZYRO card
   const timestamp = queue?.node?.getTimestamp ? queue.node.getTimestamp() : null;
   const currentMS = timestamp?.current?.value ?? queue?.node?.streamTime ?? 0;
   const totalMS = track.durationMS || timestamp?.total?.value || 0;
   const progressBar = createProgressBar(currentMS, totalMS, PROGRESS_BAR_SIZE);
+  const currentStr = fmtDuration(currentMS);
+  const totalStr = totalMS > 0 ? fmtDuration(totalMS) : 'live';
 
   const titleText = track.title || 'Unknown track';
   const authorText = track.author || 'Unknown artist';
   const url = track.url || null;
+  const statusIcon = isPaused ? '⏸' : '▶';
 
   const embed = new EmbedBuilder()
-    .setColor(0x2b2d31)
-    .setTitle(`▶ Now playing: ${titleText}`)
+    .setColor(0x7b2cbf) // Vibrant ZYRO purple
+    .setAuthor({
+      name: `🎵 ${botUser.username.toUpperCase()} • NOW PLAYING`,
+      iconURL: botAvatar,
+    })
+    .setTitle(titleText)
     .setDescription(
-      `by **${authorText}**${track.requestedBy ? ` • requested by <@${track.requestedBy.id}>` : ''}\n\n` +
-      `\`${progressBar}\``
+      `by **${authorText}**\n\n` +
+      `${statusIcon} ${progressBar} \`${currentStr} / ${totalStr}\`\n\n` +
+      `🔊 \`${volume}%\` • 📜 \`${queueSize}\` in queue • Loop: \`${loopLabel}\` • 👤📻 Autoplay Radio`
     );
 
   if (url) embed.setURL(url);
-  if (track.thumbnail) embed.setImage(track.thumbnail);
+  // Small thumbnail in upper-right corner (matching ZYRO)
+  if (track.thumbnail) embed.setThumbnail(track.thumbnail);
 
   embed
-    .addFields(
-      { name: 'Volume', value: `${volume}%`, inline: true },
-      { name: 'Queue', value: `${queueSize}`, inline: true },
-      { name: 'Loop', value: getLoopModeLabel(repeatMode), inline: true },
-      { name: 'Autoplay Radio', value: isAutoplay ? 'On' : 'Off', inline: true }
-    )
     .setFooter({
-      text: `${botUser.username} Music • 24/7 mode ${is247 ? 'active' : 'inactive'}`,
+      text: `${botUser.username} Music • 24/7 Mode ${is247 ? 'Active' : 'Inactive'}`,
     })
     .setTimestamp();
 
@@ -231,6 +251,14 @@ function buildPanel(queue, currentTrack = null) {
   return { embeds: [embed], components };
 }
 
+function setPanelMessage(guildId, messageId, channelId) {
+  panelState.set(guildId, {
+    messageId,
+    channelId,
+    createdAt: Date.now(),
+  });
+}
+
 async function updatePanel(queue, currentTrack = null) {
   if (!queue || !queue.guild) return null;
   const guildId = queue.guild.id;
@@ -240,10 +268,14 @@ async function updatePanel(queue, currentTrack = null) {
   const payload = buildPanel(queue, currentTrack);
   const state = panelState.get(guildId);
 
-  // If we have an existing message within 15 minutes, edit it
-  if (state && state.messageId && Date.now() - state.createdAt < EDIT_WINDOW_MS) {
+  // If we have an existing panel message, edit it in place
+  if (state && state.messageId) {
     try {
-      const msg = await channel.messages.fetch(state.messageId).catch(() => null);
+      const targetChannel =
+        state.channelId === channel.id
+          ? channel
+          : (queue.guild.channels.cache.get(state.channelId) || channel);
+      const msg = await targetChannel.messages.fetch(state.messageId).catch(() => null);
       if (msg) {
         await msg.edit(payload);
         return msg;
@@ -253,15 +285,11 @@ async function updatePanel(queue, currentTrack = null) {
     }
   }
 
-  // Send a fresh message if none exists, fetch failed, or 15-minute edit window expired
+  // Send a fresh panel message if none exists or fetch failed
   try {
     const sent = await channel.send(payload);
     if (sent) {
-      panelState.set(guildId, {
-        messageId: sent.id,
-        channelId: channel.id,
-        createdAt: Date.now(),
-      });
+      setPanelMessage(guildId, sent.id, channel.id);
       return sent;
     }
   } catch (e) {
@@ -305,12 +333,12 @@ async function handleButtonInteraction(interaction, context) {
   const guildId = interaction.guildId;
   const queue = player.nodes.get(guildId);
 
-  // Check voice channel match
+  // Check voice channel match if bot is currently in a VC
   const member = interaction.member;
   const botVoiceId = interaction.guild.members.me?.voice?.channelId;
-  if (!botVoiceId || member?.voice?.channelId !== botVoiceId) {
+  if (botVoiceId && member?.voice?.channelId !== botVoiceId) {
     return interaction.reply({
-      content: '❌ You must join the same voice channel as the bot to control playback.',
+      content: '❌ You must join the same voice channel as the bot to use the dashboard buttons.',
       ephemeral: true,
     });
   }
@@ -336,7 +364,7 @@ async function handleButtonInteraction(interaction, context) {
       desc += '_No tracks queued._';
     }
     const qEmbed = new EmbedBuilder()
-      .setColor(0x5865f2)
+      .setColor(0x7b2cbf)
       .setTitle(`🎶 Queue for ${interaction.guild.name}`)
       .setDescription(desc);
     return interaction.reply({ embeds: [qEmbed], ephemeral: true });
@@ -361,12 +389,14 @@ async function handleButtonInteraction(interaction, context) {
     }
     case 'panel_skip': {
       queue.node.skip();
+      setTimeout(() => updatePanel(queue).catch(() => {}), 350);
       break;
     }
     case 'panel_previous': {
       const hist = queue.history;
       if (hist && hist.size > 0) {
         await hist.back().catch(() => {});
+        setTimeout(() => updatePanel(queue).catch(() => {}), 350);
       } else {
         await interaction.followUp({ content: '⏮ No previous track in history.', ephemeral: true }).catch(() => {});
       }
@@ -385,9 +415,10 @@ async function handleButtonInteraction(interaction, context) {
     }
     case 'panel_autoplay': {
       const current = store.flags(guildId).autoplay;
-      store.setFlag(guildId, 'autoplay', !current);
+      const nextState = !current;
+      store.setFlag(guildId, 'autoplay', nextState);
       if (music && music.applyFlagsToQueue) music.applyFlagsToQueue(queue);
-      if (!current && music && music.kickAutoplay) {
+      if (nextState && music && music.kickAutoplay) {
         await music.kickAutoplay(queue);
       }
       break;
@@ -418,6 +449,7 @@ async function handleButtonInteraction(interaction, context) {
 module.exports = {
   buildPanel,
   updatePanel,
+  setPanelMessage,
   startProgressInterval,
   stopProgressInterval,
   clearPanel,

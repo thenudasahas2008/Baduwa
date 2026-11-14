@@ -1,6 +1,10 @@
-// /nowplaying — show the song currently playing with a progress bar
-const { SlashCommandBuilder, InteractionContextType, ApplicationIntegrationType } = require('discord.js');
-const { nowPlayingEmbed } = require('../bot/ui');
+// /nowplaying — show the song currently playing with the full ZYRO dashboard panel
+const {
+  SlashCommandBuilder,
+  InteractionContextType,
+  ApplicationIntegrationType,
+} = require('discord.js');
+const { buildPanel } = require('../bot/panel');
 
 const data = new SlashCommandBuilder()
   .setName('nowplaying')
@@ -11,12 +15,14 @@ const data = new SlashCommandBuilder()
 async function execute(interaction, ctx) {
   const queue = ctx.player.nodes.get(interaction.guild.id);
   if (!queue || !queue.currentTrack) {
-    return void (await interaction.reply({ content: 'Nothing is playing right now.', ephemeral: true }));
+    return void (await interaction.reply({
+      content: 'Nothing is playing right now. Use `/play` to start a song!',
+      ephemeral: true,
+    }));
   }
-  const bar = queue.node.createProgressBar({ timecodes: true, length: 18 });
-  const embed = nowPlayingEmbed(queue, queue.currentTrack);
-  if (bar) embed.addFields({ name: 'Progress', value: bar });
-  await interaction.reply({ embeds: [embed] });
+
+  const payload = buildPanel(queue, queue.currentTrack);
+  await interaction.reply(payload);
 }
 
 module.exports = { data, execute };

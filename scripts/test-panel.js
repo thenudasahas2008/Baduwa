@@ -1,5 +1,6 @@
 // Test suite for ZYRO-style now-playing panel:
-// Asserts progress-bar math (50% marker centered), button counts (<= 5 per row),
+// Asserts progress-bar math (50% marker centered with clean line '─' and marker '🔵'),
+// button counts (<= 5 per row, 4 rows total),
 // label toggles (Pause<->Resume), loop cycle (Off->Track->Queue->Off),
 // and volume clamping (0-150).
 const assert = require('node:assert');
@@ -15,22 +16,23 @@ const {
 function testProgressBar() {
   console.log('Testing progress bar...');
 
-  // 1) 50% marker at half duration with default size 9
-  const bar50 = createProgressBar(150_000, 300_000, 9);
+  // 1) 50% marker at half duration with default size 12
+  const bar50 = createProgressBar(150_000, 300_000, 12);
   console.log('  50% bar:', bar50);
-  assert(bar50.includes('▬▬▬▬●▬▬▬▬'), 'Expected 50% bar to have marker centered: ▬▬▬▬●▬▬▬▬');
-  const [left, right] = bar50.split(' ')[0].split('●');
-  assert.strictEqual(left.length, right.length, 'Expected equal number of bars on both sides of marker at 50%');
+  assert(bar50.includes('🔵'), 'Expected bar to have marker 🔵');
+  assert(bar50.includes('─'), 'Expected bar to use smooth continuous line ─');
+  const [left, right] = bar50.split('🔵');
+  assert.strictEqual(left.length, right.length, 'Expected equal number of line characters on both sides at 50%');
 
   // 2) 0% marker at beginning
-  const bar0 = createProgressBar(0, 100_000, 9);
+  const bar0 = createProgressBar(0, 100_000, 12);
   console.log('  0% bar:', bar0);
-  assert(bar0.startsWith('●▬▬▬▬▬▬▬▬'), 'Expected marker at start for 0%');
+  assert(bar0.startsWith('🔵'), 'Expected marker at start for 0%');
 
   // 3) 100% marker at end
-  const bar100 = createProgressBar(100_000, 100_000, 9);
+  const bar100 = createProgressBar(100_000, 100_000, 12);
   console.log('  100% bar:', bar100);
-  assert(bar100.split(' ')[0].endsWith('●'), 'Expected marker at end for 100%');
+  assert(bar100.endsWith('🔵'), 'Expected marker at end for 100%');
 
   console.log('  -> Progress bar tests PASSED');
 }
@@ -38,21 +40,32 @@ function testProgressBar() {
 function testButtonsAndRows() {
   console.log('Testing button counts and IDs...');
   const rows = buildPanelButtons({ isPaused: false, autoplay: true, loopMode: 0 });
-  assert.strictEqual(rows.length, 2, 'Expected exactly 2 action rows');
+  assert.strictEqual(rows.length, 4, 'Expected exactly 4 action rows matching ZYRO card');
+
+  for (let i = 0; i < rows.length; i++) {
+    const comps = rows[i].components;
+    assert(comps.length <= 5, `Row ${i + 1} cannot exceed 5 buttons`);
+  }
 
   const row1 = rows[0].components;
   const row2 = rows[1].components;
+  const row3 = rows[2].components;
+  const row4 = rows[3].components;
 
-  assert(row1.length <= 5, 'Row 1 cannot exceed 5 buttons');
-  assert(row2.length <= 5, 'Row 2 cannot exceed 5 buttons');
-  assert.strictEqual(row1.length, 5, 'Expected 5 buttons in Row 1');
-  assert.strictEqual(row2.length, 5, 'Expected 5 buttons in Row 2');
+  assert.strictEqual(row1.length, 3, 'Expected 3 buttons in Row 1 (Pause, Skip, Shuffle)');
+  assert.strictEqual(row2.length, 1, 'Expected 1 button in Row 2 (Stop)');
+  assert.strictEqual(row3.length, 3, 'Expected 3 buttons in Row 3 (Previous, Autoplay, Queue)');
+  assert.strictEqual(row4.length, 3, 'Expected 3 buttons in Row 4 (Loop, Vol+, Vol-)');
 
   const row1Ids = row1.map((b) => b.data.custom_id);
   const row2Ids = row2.map((b) => b.data.custom_id);
+  const row3Ids = row3.map((b) => b.data.custom_id);
+  const row4Ids = row4.map((b) => b.data.custom_id);
 
-  assert.deepStrictEqual(row1Ids, ['panel_pause', 'panel_skip', 'panel_previous', 'panel_stop', 'panel_shuffle']);
-  assert.deepStrictEqual(row2Ids, ['panel_autoplay', 'panel_loop', 'panel_queue', 'panel_volup', 'panel_voldown']);
+  assert.deepStrictEqual(row1Ids, ['panel_pause', 'panel_skip', 'panel_shuffle']);
+  assert.deepStrictEqual(row2Ids, ['panel_stop']);
+  assert.deepStrictEqual(row3Ids, ['panel_previous', 'panel_autoplay', 'panel_queue']);
+  assert.deepStrictEqual(row4Ids, ['panel_loop', 'panel_volup', 'panel_voldown']);
 
   console.log('  -> Button count and custom_id tests PASSED');
 }
@@ -105,42 +118,43 @@ function testVolumeClamping() {
 function testPanelConstruction() {
   console.log('Testing buildPanel with fake queue...');
   const fakeTrack = {
-    title: 'Gaulois - Jolie feat. @ninho',
-    author: 'Gaulois officiel',
+    title: 'Bruno Mars - Just The Way You Are (Official Music Video)',
+    author: 'Bruno Mars',
     url: 'https://www.youtube.com/watch?v=fake123',
     thumbnail: 'https://i.ytimg.com/vi/fake123/hqdefault.jpg',
-    durationMS: 261_000,
+    durationMS: 237_000,
     requestedBy: { id: '999999999' },
   };
 
   const fakeQueue = {
     guild: { id: 'guild-123' },
-    client: { user: { username: 'Baduwa' } },
+    client: { user: { username: 'Baduwa', displayAvatarURL: () => 'https://example.com/avatar.png' } },
     currentTrack: fakeTrack,
     node: {
       volume: 100,
       isPaused: () => false,
-      getTimestamp: () => ({ current: { value: 187_000 }, total: { value: 261_000 } }),
+      getTimestamp: () => ({ current: { value: 52_000 }, total: { value: 237_000 } }),
     },
-    tracks: { size: 3 },
+    tracks: { size: 0 },
     repeatMode: 0,
   };
 
   const panel = buildPanel(fakeQueue, fakeTrack);
   assert(panel.embeds && panel.embeds.length === 1, 'Expected 1 embed');
-  assert(panel.components && panel.components.length === 2, 'Expected 2 action rows');
+  assert(panel.components && panel.components.length === 4, 'Expected 4 action rows');
 
   const embed = panel.embeds[0].data;
-  assert(embed.title.includes('Gaulois - Jolie'), 'Embed title must include song name');
-  assert(embed.description.includes('Gaulois officiel'), 'Embed description must include artist');
-  assert.strictEqual(embed.image.url, fakeTrack.thumbnail, 'Embed image must match track thumbnail');
-
-  const fieldNames = embed.fields.map((f) => f.name);
-  assert(fieldNames.includes('Volume'), 'Embed must include Volume field');
-  assert(fieldNames.includes('Queue'), 'Embed must include Queue field');
-  assert(fieldNames.includes('Loop'), 'Embed must include Loop field');
-  assert(fieldNames.includes('Autoplay Radio'), 'Embed must include Autoplay Radio field');
-
+  assert(embed.title.includes('Bruno Mars - Just The Way You Are'), 'Embed title must include song name');
+  assert(embed.description.includes('Bruno Mars'), 'Embed description must include artist');
+  assert(embed.description.includes('──🔵─────────'), 'Description must include smooth progress bar');
+  assert(embed.description.includes('0:52 / 3:57'), 'Description must include formatted timestamps');
+  assert(embed.description.includes('100%'), 'Description must include volume indicator');
+  assert(embed.description.includes('`0` in queue'), 'Description must include queue indicator');
+  assert(embed.description.includes('Loop: `Off`'), 'Description must include loop indicator');
+  assert(embed.description.includes('Autoplay Radio'), 'Description must include autoplay radio indicator');
+  assert.strictEqual(embed.thumbnail.url, fakeTrack.thumbnail, 'Embed thumbnail must match track thumbnail');
+  assert.strictEqual(embed.color, 0x7b2cbf, 'Embed color must be purple (0x7b2cbf)');
+  assert(embed.author.name.includes('NOW PLAYING'), 'Author must include NOW PLAYING');
   assert(embed.footer.text.includes('Baduwa Music'), 'Footer must contain bot name');
 
   console.log('  -> buildPanel tests PASSED');

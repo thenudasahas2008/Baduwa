@@ -1,9 +1,12 @@
 // /play — the main command. Supports song names, YouTube links (video/playlist),
 // Spotify links (track/album/playlist) and other direct audio URLs.
-const { SlashCommandBuilder, InteractionContextType, ApplicationIntegrationType } = require('discord.js');
-const { EmbedBuilder } = require('discord.js');
-const { trackBaseEmbed, fmtDuration } = require('../bot/ui');
-const { isUrl } = require('../bot/music');
+const {
+  SlashCommandBuilder,
+  InteractionContextType,
+  ApplicationIntegrationType,
+  EmbedBuilder,
+} = require('discord.js');
+const { buildPanel, setPanelMessage, startProgressInterval, updatePanel } = require('../bot/panel');
 
 const data = new SlashCommandBuilder()
   .setName('play')
@@ -51,18 +54,24 @@ async function autocomplete(interaction, ctx) {
 async function execute(interaction, ctx) {
   const query = interaction.options.getString('query', true);
   const asNext = interaction.options.getBoolean('next') || false;
-  const member = interaction.guild.members.cache.get(interaction.user.id) || (await interaction.guild.members.fetch(interaction.user.id));
+  const member =
+    interaction.guild.members.cache.get(interaction.user.id) ||
+    (await interaction.guild.members.fetch(interaction.user.id));
   const voiceChannel = member && member.voice && member.voice.channel;
 
-  const isPlaylistish = /list=|playlist|album/.test(query) || /open\.spotify\.com\/(album|playlist)/.test(query);
-  if (isPlaylistish) await interaction.deferReply();
-  const reply = isPlaylistish ? (p) => interaction.editReply(p) : (p) => interaction.reply(p);
-
   if (!voiceChannel) {
-    return void (await reply({ content: 'You need to join a voice channel first! 🎧' }));
+    return void (await interaction.reply({
+      content: 'You need to join a voice channel first! 🎧',
+      ephemeral: true,
+    }));
   }
 
+  await interaction.deferReply();
+
   try {
+    const existingQueue = ctx.player.nodes.get(interaction.guild.id);
+    const alreadyPlaying = existingQueue && existingQueue.isPlaying();
+
     const out = await ctx.music.playQuery({
       guild: interaction.guild,
       voiceChannel,
@@ -71,29 +80,46 @@ async function execute(interaction, ctx) {
       query,
     });
 
-    const alreadyPlaying = ctx.player.nodes.get(interaction.guild.id)?.isPlaying() && out.count === 1 && !out.playlist;
-    const embed = trackBaseEmbed(out.first)
-      .setDescription(
-        alreadyPlaying
-          ? `**Added to queue** at position #${ctx.player.nodes.get(interaction.guild.id).size}`
-          : '**Started playing**'
-      )
-      .addFields({ name: 'Duration', value: out.first.duration || 'live', inline: true });
+    const queue = ctx.player.nodes.get(interaction.guild.id);
 
-    if (out.playlist && out.count > 1) {
-      embed.setAuthor({ name: `${out.playlist.title || 'Playlist'} • ${out.count} tracks` });
-    }
-    if (asNext && ctx.player.nodes.get(interaction.guild.id).size > 1) {
-      const q = ctx.player.nodes.get(interaction.guild.id);
-      const track = q.tracks.at(q.size - 1);
-      q.node.move(track, 0);
-      embed.setDescription('**Added to front** — plays next');
+    if (asNext && queue && queue.size > 1) {
+      const track = queue.tracks.at(queue.size - 1);
+      queue.node.move(track, 0);
     }
 
-    await reply({ embeds: [embed] });
+    if (alreadyPlaying) {
+      // Added to existing queue -> reply with sleek confirmation & refresh panel stats
+      const first = out.first || {};
+      const addedEmbed = new EmbedBuilder()
+        .setColor(0x7b2cbf)
+        .setDescription(
+          asNext
+            ? `⏭️ **Added to front:** [${first.title || 'Track'}](${first.url || ''}) — plays next • by **${first.author || 'Artist'}**`
+            : `✅ **Added to queue:** [${first.title || 'Track'}](${first.url || ''}) (#${queue?.tracks?.size || 1}) • by **${first.author || 'Artist'}**`
+        );
+
+      if (out.playlist && out.count > 1) {
+        addedEmbed.setAuthor({
+          name: `${out.playlist.title || 'Playlist'} • ${out.count} tracks added`,
+        });
+      }
+
+      await interaction.editReply({ embeds: [addedEmbed] });
+      if (queue) await updatePanel(queue).catch(() => {});
+    } else {
+      // Brand new playback -> Immediately send the ZYRO dashboard
+      const payload = buildPanel(queue, out.first);
+      const msg = await interaction.editReply(payload);
+      if (msg && msg.id) {
+        setPanelMessage(interaction.guild.id, msg.id, interaction.channelId);
+      }
+      if (queue) {
+        startProgressInterval(queue);
+      }
+    }
   } catch (e) {
     console.error('[play]', e);
-    await reply({ content: `Could not play that: ${e.message || e}` }).catch(() => {});
+    await interaction.editReply({ content: `Could not play that: ${e.message || e}` }).catch(() => {});
   }
 }
 

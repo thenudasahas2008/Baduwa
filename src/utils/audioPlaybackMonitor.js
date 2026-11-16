@@ -230,7 +230,7 @@ class AudioPlaybackMonitor {
         this.startWatchdog();
     }
 
-    onPlayerUpdate(oldPlayer, newPlayer) {
+    async onPlayerUpdate(oldPlayer, newPlayer) {
         if (!newPlayer || !newPlayer.guildId) return;
         const state = this.getOrCreateState(newPlayer.guildId);
 
@@ -264,6 +264,7 @@ class AudioPlaybackMonitor {
         // Diagnostic logging of voice connection status transitions
         if (isConnected && !state.hasLoggedConnected) {
             state.hasLoggedConnected = true;
+            state.voiceDisconnectedChecks = 0;
             this.logDiagnostic('VOICE_GATEWAY_CONNECTED', {
                 guildId: newPlayer.guildId,
                 nodeId: newPlayer.node?.id || 'unknown',
@@ -271,6 +272,8 @@ class AudioPlaybackMonitor {
                 position: currentPos,
                 detail: `Lavalink connected to Discord voice gateway, ping=${validPing != null ? validPing + 'ms' : 'n/a'}`
             });
+            // Update dashboard message in-place to clear any voice disconnected banner
+            this.client?.playerController?.updatePlayer?.(newPlayer.guildId, { replace: false }).catch(() => {});
         } else if (!isConnected && state.hasLoggedConnected) {
             state.hasLoggedConnected = false;
             this.logDiagnostic('VOICE_GATEWAY_DISCONNECTED', {
@@ -281,6 +284,12 @@ class AudioPlaybackMonitor {
                 detail: 'Lavalink lost connection to Discord voice gateway (ping: -1, connected: false)',
                 level: 'warn'
             });
+
+            // If bot is still inside a Discord voice channel, immediately trigger auto-healing
+            const guild = this.client?.guilds?.cache?.get(newPlayer.guildId);
+            if (guild?.members?.me?.voice?.channelId) {
+                await this.autoHealVoiceConnection(newPlayer).catch(() => {});
+            }
         }
 
         // Verified playback recovery: confirm success only when real progression is observed
@@ -503,12 +512,80 @@ class AudioPlaybackMonitor {
         const reconnectableCodes = [4006, 4009, 4014, 4015, 1000, 1001, 1006];
         if (reconnectableCodes.includes(code) && (player.playing || this.client?.is247Enabled?.(player.guildId))) {
             logger.info(`Reconnecting Discord voice for guild ${player.guildId} after voice socket closed (${code})...`);
-            try {
-                await player.connect();
-            } catch (connErr) {
+            await this.autoHealVoiceConnection(player).catch((connErr) => {
                 logger.debug('Voice reconnection after socket closed failed:', connErr?.message || connErr);
+            });
+        }
+    }
+
+    /**
+     * Automatically heals Lavalink's connection to the Discord voice gateway when
+     * player.connected is false while the bot is inside a Discord voice channel.
+     */
+    async autoHealVoiceConnection(player) {
+        if (!player || !player.guildId) return false;
+        const guildId = player.guildId;
+        const state = this.getOrCreateState(guildId);
+
+        // Debounce healing attempts (minimum 3 seconds between attempts per guild)
+        const now = Date.now();
+        if (now - (state.lastVoiceHealAttempt || 0) < 3000) {
+            return false;
+        }
+        state.lastVoiceHealAttempt = now;
+
+        const guild = this.client?.guilds?.cache?.get(guildId);
+        const meVoice = guild?.members?.me?.voice;
+        const channelId = meVoice?.channelId || player.voiceChannelId || player.options?.voiceChannelId;
+
+        // If bot is not in a Discord voice channel, cannot heal gateway socket
+        if (!channelId) {
+            return false;
+        }
+
+        this.logDiagnostic('VOICE_GATEWAY_HEALING', {
+            guildId,
+            nodeId: player.node?.id || 'unknown',
+            trackIdentifier: player.queue?.current?.info?.identifier,
+            position: player.position || 0,
+            detail: `Attempting voice gateway auto-healing for channel ${channelId}`,
+            level: 'warn'
+        });
+
+        // 1. Invalidate cached dispatch fingerprint in VoiceHandshakeSynchronizer
+        if (this.client?.voiceHandshakeSynchronizer) {
+            this.client.voiceHandshakeSynchronizer.invalidateFingerprint(guildId);
+        }
+
+        // 2. Check if complete voice credentials are known in synchronizer
+        const voiceState = this.client?.voiceHandshakeSynchronizer?.getVoiceState?.(guildId);
+        const effectiveSession = voiceState?.sessionId || meVoice?.sessionId || player.voice?.sessionId;
+        const effectiveToken = voiceState?.token || player.voice?.token;
+        const effectiveEndpoint = voiceState?.endpoint || player.voice?.endpoint;
+
+        if (effectiveToken && effectiveEndpoint && effectiveSession && player.node?.sessionId) {
+            try {
+                await this.client.voiceHandshakeSynchronizer.dispatchToLavalink(
+                    player,
+                    guildId,
+                    effectiveToken,
+                    effectiveEndpoint,
+                    effectiveSession,
+                    channelId
+                );
+            } catch (err) {
+                logger.debug(`[AUDIO-MONITOR] Voice gateway credentials dispatch failed: ${err?.message || err}`);
             }
         }
+
+        // 3. Re-trigger player.connect() to request fresh voice server/state update from Discord gateway
+        try {
+            await player.connect();
+        } catch (connErr) {
+            logger.debug(`[AUDIO-MONITOR] player.connect() voice heal error: ${connErr?.message || connErr}`);
+        }
+
+        return true;
     }
 
     onPlayerDestroy(player) {
@@ -624,9 +701,35 @@ class AudioPlaybackMonitor {
                 this.onNodeStats(player.node, player.node.stats);
             }
 
-            // 1. Must be actively playing and not paused, with healthy node and voice connection
-            if (!player.playing || player.paused || !currentTrack || !player.node?.connected || player.connected === false) {
-                if (!player.node?.connected || player.connected === false) {
+            // 1. Check Lavalink player voice connection state
+            const guild = this.client?.guilds?.cache?.get(guildId);
+            const isDiscordVoiceConnected = Boolean(guild?.members?.me?.voice?.channelId);
+
+            if (player.connected === false) {
+                if (isDiscordVoiceConnected && player.playing && !player.paused && currentTrack) {
+                    state.voiceDisconnectedChecks = (state.voiceDisconnectedChecks || 0) + 1;
+                    this.autoHealVoiceConnection(player).catch(() => {});
+
+                    // If voice disconnection persists for >= 4 watchdog cycles (~12-16s), recover playback
+                    if (state.voiceDisconnectedChecks >= 4) {
+                        state.voiceDisconnectedChecks = 0;
+                        await this.recoverPlayback(player, currentTrack, {
+                            reason: 'voiceGatewayDisconnected',
+                            detail: 'Lavalink player lost Discord voice gateway connection'
+                        });
+                    }
+                } else {
+                    state.lastProgressTimestamp = now;
+                    state.stalledChecks = 0;
+                }
+                continue;
+            } else {
+                state.voiceDisconnectedChecks = 0;
+            }
+
+            // Must be actively playing and not paused, with healthy node
+            if (!player.playing || player.paused || !currentTrack || !player.node?.connected) {
+                if (!player.node?.connected) {
                     state.lastProgressTimestamp = now;
                     state.stalledChecks = 0;
                 }

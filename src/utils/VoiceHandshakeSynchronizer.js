@@ -177,7 +177,15 @@ class VoiceHandshakeSynchronizer {
         
         // Single authoritative path: prevent duplicate REST updatePlayer calls for identical credentials
         if (entry && entry.lastDispatchedFingerprint === dispatchFingerprint) {
-            return true;
+            // When player is connected (or connection status is uninitialized), deduplicate identical credentials
+            if (player?.connected !== false) {
+                return true;
+            }
+            // When player is explicitly disconnected from voice gateway (connected === false),
+            // allow re-dispatching to reconnect Lavalink's socket, throttled to avoid rapid REST spam
+            if (now - (entry.lastDispatchedAt || 0) < 2000) {
+                return true;
+            }
         }
 
         try {
@@ -220,6 +228,16 @@ class VoiceHandshakeSynchronizer {
     isVoiceReady(guildId) {
         const state = this.voiceStates.get(guildId);
         return Boolean(state && state.token && state.endpoint && state.sessionId);
+    }
+
+    /**
+     * Invalidate cached fingerprint to force re-dispatching credentials (e.g. after socket disconnect)
+     */
+    invalidateFingerprint(guildId) {
+        const entry = this.voiceStates.get(guildId);
+        if (entry) {
+            entry.lastDispatchedFingerprint = null;
+        }
     }
 
     /**

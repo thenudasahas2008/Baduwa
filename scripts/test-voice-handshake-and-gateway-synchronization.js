@@ -498,8 +498,71 @@ async function runAll() {
         assert.equal(synchronizer.getVoiceState('g-secret-leak'), null, 'Cached state and fingerprint must be cleared on disconnect');
     });
 
+    // 18. Auto-healing restores Lavalink voice gateway connection (connected: false, ping: -1) without freezing playback
+    await wrap(18, 'Auto-healing restores Lavalink voice gateway connection (connected: false, ping: -1) without freezing playback', async () => {
+        let dispatchCount = 0;
+        let connectCalled = false;
+
+        const dummyPlayer = {
+            guildId: 'g-autoheal',
+            voice: { channelId: 'vc-ghost-arena', sessionId: 'sess-123', token: 'tok-abc', endpoint: 'ep.discord.gg:443' },
+            node: {
+                id: 'node-heal',
+                sessionId: 'node-heal-session',
+                connected: true,
+                updatePlayer: async () => { dispatchCount++; }
+            },
+            playing: true,
+            paused: false,
+            connected: false,
+            ping: -1,
+            position: 4000,
+            queue: { current: { info: { title: 'Fall Back', identifier: 'lithe-fallback', duration: 130000 } } },
+            connect: async () => {
+                connectCalled = true;
+                return dummyPlayer;
+            }
+        };
+
+        const dummyClient = {
+            user: { id: 'bot-123' },
+            guilds: {
+                cache: new Map([
+                    ['g-autoheal', { members: { me: { voice: { channelId: 'vc-ghost-arena', sessionId: 'sess-123' } } } }]
+                ])
+            },
+            lavalink: { getPlayer: () => dummyPlayer }
+        };
+
+        const synchronizer = new VoiceHandshakeSynchronizer(dummyClient);
+        dummyClient.voiceHandshakeSynchronizer = synchronizer;
+
+        // Establish initial state
+        await synchronizer.handleRawGateway({
+            t: 'VOICE_STATE_UPDATE',
+            d: { guild_id: 'g-autoheal', user_id: 'bot-123', session_id: 'sess-123', channel_id: 'vc-ghost-arena' }
+        });
+        await synchronizer.handleRawGateway({
+            t: 'VOICE_SERVER_UPDATE',
+            d: { guild_id: 'g-autoheal', token: 'tok-abc', endpoint: 'ep.discord.gg:443' }
+        });
+        assert.equal(dispatchCount, 1, 'Initial handshake must dispatch once');
+
+        const monitor = new AudioPlaybackMonitor(dummyClient);
+        const state = monitor.getOrCreateState('g-autoheal');
+        state.hasLoggedConnected = true;
+
+        // Player updates to disconnected (ping: -1, connected: false)
+        const oldPlayer = { ...dummyPlayer, connected: true, ping: 30 };
+        const newPlayer = { ...dummyPlayer, connected: false, ping: -1 };
+        await monitor.onPlayerUpdate(oldPlayer, newPlayer);
+
+        assert.equal(connectCalled, true, 'autoHealVoiceConnection must call player.connect()');
+        assert.equal(dispatchCount, 2, 'autoHealVoiceConnection must re-dispatch credentials to Lavalink even if token/endpoint did not change');
+    });
+
     console.log('\n========================================');
-    console.log(`TOTAL: 17 | PASSED: ${passed} | FAILED: ${failed}`);
+    console.log(`TOTAL: ${passed + failed} | PASSED: ${passed} | FAILED: ${failed}`);
     console.log('========================================');
 
     if (failed > 0) {

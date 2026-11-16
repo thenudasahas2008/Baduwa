@@ -430,7 +430,7 @@ function registerLavalinkEvents(client) {
         }
 
         if (!client.autoplayEnabled.has(player.guildId)) {
-            const autoplayDefault = process.env.AUTOPLAY_DEFAULT === 'true';
+            const autoplayDefault = guildSettings.isAutoplay(player.guildId);
             client.autoplayEnabled.set(player.guildId, autoplayDefault);
         }
 
@@ -595,13 +595,17 @@ function registerLavalinkEvents(client) {
         };
 
         if (client.autoplayEnabled.get(guildId)) {
-            // Only natural queue completion triggers Autoplay progression
+            // Only repeated failures trigger failure loop protection
             if (endedOnFailure(payload)) {
-                logger.warn(`Queue ended on failure (${payload?.reason || payload?.type}) for guild ${guildId}; skipping autoplay to prevent failure loop.`);
-                const message = endMessage();
-                if (message) client.playerController.sendToPlayerChannel(guildId, message);
-                if (!is247) cleanupGuildPlayer(client, guildId);
-                return;
+                const { consecutive } = recordFailure(guildId);
+                if (consecutive >= CONSECUTIVE_FAILURE_LIMIT) {
+                    logger.warn(`Queue ended on repeated failures (${consecutive}) for guild ${guildId}; stopping autoplay to prevent failure loop.`);
+                    const message = endMessage();
+                    if (message) client.playerController.sendToPlayerChannel(guildId, message);
+                    if (!is247) cleanupGuildPlayer(client, guildId);
+                    return;
+                }
+                logger.warn(`Queue ended on failure for guild ${guildId} (streak: ${consecutive}); attempting autoplay recovery candidate.`);
             }
 
             // If tracks were already added by autoPlayFunction or queue has items, resume playback
@@ -619,11 +623,22 @@ function registerLavalinkEvents(client) {
                 return;
             }
 
-            const timeout = setTimeout(() => {
+            const timeout = setTimeout(async () => {
                 clearQueueEndTimeout(guildId);
 
                 const currentPlayer = client.lavalink.getPlayer(guildId);
                 if (currentPlayer?.queue.current || currentPlayer?.playing || currentPlayer?.queue?.tracks?.length > 0) return;
+
+                // Final safety retry before leaving if autoplay is enabled
+                if (client.autoplayEnabled.get(guildId)) {
+                    const retryLastTrack = (typeof currentPlayer?.getData === 'function' ? currentPlayer.getData('lastPlayedTrack') : null)
+                        || currentPlayer?.queue?.previous?.[0]
+                        || lastTrack;
+                    const retryStarted = await handleAutoplay(client, currentPlayer || player, 'queueEndRetry', retryLastTrack).catch(() => false);
+                    if (retryStarted || currentPlayer?.queue?.current || currentPlayer?.playing || currentPlayer?.queue?.tracks?.length > 0) {
+                        return;
+                    }
+                }
 
                 const message = endMessage();
                 if (message) client.playerController.sendToPlayerChannel(guildId, message);
@@ -636,7 +651,7 @@ function registerLavalinkEvents(client) {
                     client.updatePresence();
                     client.voiceChannelStatusManager?.clearStatusForGuild(guildId).catch(() => {});
                 }
-            }, AUTOPLAY_TIMEOUT_MS);
+            }, 10000);
             setQueueEndTimeout(guildId, timeout);
             return;
         }

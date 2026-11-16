@@ -2,6 +2,7 @@ const { SlashCommandBuilder, MessageFlags } = require('discord.js');
 const { schedulePlayerUpdate } = require('../utils/playerLifecycle');
 const { createActionEmbed } = require('../utils/zyroEmbeds');
 const { ensureDeferred, requirePlayer, safeReply } = require('../utils/interactionHelpers');
+const guildSettings = require('../utils/guildSettings');
 const logger = require('../utils/logger');
 
 module.exports = {
@@ -23,8 +24,12 @@ module.exports = {
             logger.cmd(`/autoplay by ${userTag} in #${channelName} (Guild: ${guildName})`);
 
             const guildId = interaction.guild.id;
-            const newState = !client.autoplayEnabled.get(guildId);
-            client.autoplayEnabled.set(guildId, newState);
+            const currentState = client.autoplayEnabled?.has(guildId)
+                ? client.autoplayEnabled.get(guildId)
+                : guildSettings.isAutoplay(guildId);
+            const newState = !currentState;
+            client.autoplayEnabled?.set(guildId, newState);
+            guildSettings.setAutoplay(guildId, newState);
 
             // When enabling autoplay, reset loop mode (DJ mode takes over)
             if (newState && player.repeatMode !== 'off') {

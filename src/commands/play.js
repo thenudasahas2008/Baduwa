@@ -330,6 +330,11 @@ module.exports = {
             }
             player.client = client;
 
+            if (client.autoplayEnabled && !client.autoplayEnabled.has(guildId)) {
+                const guildSettings = require('../utils/guildSettings');
+                client.autoplayEnabled.set(guildId, guildSettings.isAutoplay(guildId));
+            }
+
             // Always ensure player is attached to activeNode if current node is disconnected
             if (activeNode && activeNode.connected && (!player.node || !player.node.connected)) {
                 logger.info(`[PLAY] Synchronizing player node for guild ${guildId} from ${player.node?.id || 'none'} to active node ${activeNode.id}`);

@@ -7,6 +7,7 @@ const { stopPlayer, playPrevious, shuffleQueue, clearQueue, jumpToTrack, createP
 const { clearGuildLifecycleTimers, clearQueueEndTimeout, schedulePlayerUpdate } = require('../utils/playerLifecycle');
 const { clearEmptyChannelTimeout, scheduleEmptyChannelTimeout, countHumanMembers } = require('./voiceStateUpdate');
 const { createActionEmbed, formatDuration } = require('../utils/zyroEmbeds');
+const guildSettings = require('../utils/guildSettings');
 const { performanceMonitor } = require('../utils/performanceMonitor');
 const { idempotencyTracker } = require('../utils/bulkheadManager');
 const logger = require('../utils/logger');
@@ -210,9 +211,12 @@ async function handlePlayerInteraction(interaction, action, args = []) {
             break;
         }
         case 'autoplay': {
-            const currentAutoplay = client.autoplayEnabled.get(interaction.guild.id) || false;
+            const currentAutoplay = client.autoplayEnabled?.has(interaction.guild.id)
+                ? client.autoplayEnabled.get(interaction.guild.id)
+                : guildSettings.isAutoplay(interaction.guild.id);
             const newAutoplay = !currentAutoplay;
-            client.autoplayEnabled.set(interaction.guild.id, newAutoplay);
+            client.autoplayEnabled?.set(interaction.guild.id, newAutoplay);
+            guildSettings.setAutoplay(interaction.guild.id, newAutoplay);
             if (newAutoplay && player.repeatMode !== 'off') {
                 player.setRepeatMode('off');
             }

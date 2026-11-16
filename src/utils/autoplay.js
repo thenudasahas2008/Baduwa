@@ -674,12 +674,15 @@ async function handleAutoplay(client, player, reason = 'unknown', seedTrack = nu
         return false;
     }
 
-    // Playlist session check: respect playlist session boundary
+    // Playlist session check: clear playlist boundary so infinite autoplay can take over on queueEnd
     const playlistSession = typeof player.getData === 'function' ? player.getData('playlistSession') : null;
     if (playlistSession?.isPlaylist) {
-        logger.info(`Playlist session finished for guild ${guildId}; stopping autoplay as playlist completed.`);
         player.setData('playlistSession', null);
-        return false;
+        if (reason === 'autoPlayFunction') {
+            logger.info(`Playlist session finished for guild ${guildId}; autoPlayFunction respecting boundary.`);
+            return false;
+        }
+        logger.info(`Playlist session finished for guild ${guildId}; transitioning into infinite autoplay mode.`);
     }
 
     // If upcoming queue already has tracks:
@@ -701,10 +704,13 @@ async function handleAutoplay(client, player, reason = 'unknown', seedTrack = nu
         || player.queue?.current;
 
     // Deduplication check: prevent multiple rapid triggers for the exact same seed track
+    // Only apply suppression if the player is actively playing or queue already has items.
+    // When the queue is empty and playback is idle, discovery must proceed to prevent the bot from disconnecting.
+    const hasQueue = (player.queue?.tracks?.length || 0) > 0 || Boolean(player.playing && player.queue?.current);
     const seedId = seed?.info?.identifier;
     const now = Date.now();
     const lastHandled = lastHandledSeedByGuild.get(guildId);
-    if (seedId && lastHandled && lastHandled.seedId === seedId && (now - lastHandled.timestamp) < 8000) {
+    if (hasQueue && seedId && lastHandled && lastHandled.seedId === seedId && (now - lastHandled.timestamp) < 8000) {
         logger.debug(`[AUTOPLAY] Suppressing duplicate autoplay discovery for guild ${guildId} with same seed ${seedId}`);
         return false;
     }
@@ -754,27 +760,54 @@ async function handleAutoplay(client, player, reason = 'unknown', seedTrack = nu
             return false;
         }
 
-        if (!tracks || tracks.length === 0) {
-            logger.warn(`[AUTOPLAY] No recommendation candidates found for guild ${guildId}`);
-            return false;
-        }
-
-        // Filter out any candidates that match the current track or upcoming queue
+        let eligibleTracks = [];
         const currentId = player.queue.current?.info?.identifier;
         const upcomingIds = new Set((player.queue.tracks || []).map(t => t?.info?.identifier).filter(Boolean));
         const currentTrackRef = player.queue.current;
 
-        const eligibleTracks = tracks.filter(t => {
-            if (!t?.info?.identifier) return false;
-            if (currentId && t.info.identifier === currentId) return false;
-            if (upcomingIds.has(t.info.identifier)) return false;
-            if (currentTrackRef && isDuplicate(t, null, [currentTrackRef])) return false;
-            if (seed && isDuplicate(t, null, [seed])) return false;
-            return true;
-        });
+        if (tracks && tracks.length > 0) {
+            eligibleTracks = tracks.filter(t => {
+                if (!t?.info?.identifier) return false;
+                if (currentId && t.info.identifier === currentId) return false;
+                if (upcomingIds.has(t.info.identifier)) return false;
+                if (currentTrackRef && isDuplicate(t, null, [currentTrackRef])) return false;
+                if (seed && isDuplicate(t, null, [seed])) return false;
+                return true;
+            });
+
+            // Soft fallback: relax strict duplicate check to any candidate not currently playing or in upcoming queue
+            if (eligibleTracks.length === 0) {
+                eligibleTracks = tracks.filter(t => {
+                    if (!t?.info?.identifier) return false;
+                    if (currentId && t.info.identifier === currentId) return false;
+                    if (upcomingIds.has(t.info.identifier)) return false;
+                    return true;
+                });
+            }
+        }
+
+        // Emergency fallback: search related music on YouTube if candidate pool ran dry
+        if (eligibleTracks.length === 0) {
+            const queryArtist = cleanAuthor(seed?.userData?.spotifyArtist || seed?.info?.author || '');
+            const queryTitle = cleanTitle(seed?.userData?.spotifyTitle || seed?.info?.title || '');
+            const fallbackQuery = queryArtist && !isGenericArtist(queryArtist)
+                ? `${queryArtist} songs`
+                : (queryTitle ? `${queryTitle} song` : 'top hits songs');
+
+            logger.info(`[AUTOPLAY] Candidates exhausted; running emergency fallback search for guild ${guildId}: "${fallbackQuery}"`);
+            const fallbackRes = await player.search({ query: fallbackQuery, source: 'ytsearch' }).catch(() => null);
+            if (fallbackRes?.tracks?.length > 0) {
+                eligibleTracks = fallbackRes.tracks.filter(t => {
+                    if (!t?.info?.identifier) return false;
+                    if (currentId && t.info.identifier === currentId) return false;
+                    if (upcomingIds.has(t.info.identifier)) return false;
+                    return true;
+                });
+            }
+        }
 
         if (eligibleTracks.length === 0) {
-            logger.warn(`[AUTOPLAY] All discovered candidates were duplicates of current/upcoming tracks for guild ${guildId}`);
+            logger.warn(`[AUTOPLAY] All discovered candidates and emergency fallbacks exhausted for guild ${guildId}`);
             return false;
         }
 

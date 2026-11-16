@@ -347,10 +347,14 @@ class TwentyFourSevenManager {
                         this.sessions.delete(guildId);
                         this.scheduleAutoRecovery(client, guildId, voiceChannelId, 'watchdog_disconnect_detected');
                     } else if (player && !isPlayerConnected && player.node?.connected) {
-                        logger.info(`[247-WATCHDOG] Lavalink player disconnected from voice in guild ${guild.name || guildId} while bot is in channel. Re-connecting player...`);
-                        player.connect().catch((pErr) => {
-                            logger.debug(`[247-WATCHDOG] Re-connect player caught:`, pErr?.message || pErr);
-                        });
+                        if (player.playing && player.queue?.current && client.audioPlaybackMonitor?.autoHealVoiceConnection) {
+                            client.audioPlaybackMonitor.autoHealVoiceConnection(player, { forceGatewayReconnect: false }).catch(() => {});
+                        } else {
+                            logger.info(`[247-WATCHDOG] Lavalink player disconnected from voice in guild ${guild.name || guildId} while bot is in channel. Re-connecting player...`);
+                            player.connect().catch((pErr) => {
+                                logger.debug(`[247-WATCHDOG] Re-connect player caught:`, pErr?.message || pErr);
+                            });
+                        }
                     }
                 } catch (checkErr) {
                     logger.debug(`[247-WATCHDOG] Check error for guild ${guildId}:`, checkErr?.message || checkErr);

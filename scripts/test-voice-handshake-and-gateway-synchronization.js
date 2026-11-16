@@ -552,13 +552,21 @@ async function runAll() {
         const state = monitor.getOrCreateState('g-autoheal');
         state.hasLoggedConnected = true;
 
-        // Player updates to disconnected (ping: -1, connected: false)
+        // 1st update to disconnected: transient update should be debounced
         const oldPlayer = { ...dummyPlayer, connected: true, ping: 30 };
         const newPlayer = { ...dummyPlayer, connected: false, ping: -1 };
         await monitor.onPlayerUpdate(oldPlayer, newPlayer);
+        assert.equal(dispatchCount, 1, 'Transient single-update disconnect must be debounced without immediately re-dispatching');
 
-        assert.equal(connectCalled, true, 'autoHealVoiceConnection must call player.connect()');
-        assert.equal(dispatchCount, 2, 'autoHealVoiceConnection must re-dispatch credentials to Lavalink even if token/endpoint did not change');
+        // 2nd consecutive update to disconnected: sustained disconnect triggers smooth credential re-dispatch
+        await monitor.onPlayerUpdate(oldPlayer, newPlayer);
+        assert.equal(dispatchCount, 2, 'autoHealVoiceConnection must re-dispatch credentials to Lavalink');
+        assert.equal(connectCalled, false, 'autoHealVoiceConnection must NOT call player.connect() when credentials exist to avoid dropping Discord audio');
+
+        // 3rd test: when forceGatewayReconnect is explicitly set or credentials missing, player.connect() is called
+        state.lastVoiceHealAttempt = 0;
+        await monitor.autoHealVoiceConnection(newPlayer, { forceGatewayReconnect: true });
+        assert.equal(connectCalled, true, 'autoHealVoiceConnection must call player.connect() when forceGatewayReconnect is true');
     });
 
     console.log('\n========================================');

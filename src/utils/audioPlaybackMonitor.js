@@ -244,12 +244,12 @@ class AudioPlaybackMonitor {
             state.lastProgressTimestamp = Date.now();
             state.stalledChecks = 0;
             state.consecutiveProgressCount = 1;
-        } else if (currentPos > lastPos + 200) {
+        } else if (currentPos > lastPos + 50) {
             state.lastPosition = currentPos;
             state.lastProgressTimestamp = Date.now();
             state.stalledChecks = 0;
             state.consecutiveProgressCount = (state.consecutiveProgressCount || 0) + 1;
-        } else if (Math.abs(currentPos - lastPos) <= 50) {
+        } else if (Math.abs(currentPos - lastPos) <= 20) {
             state.consecutiveProgressCount = 0;
         }
 
@@ -262,33 +262,41 @@ class AudioPlaybackMonitor {
         state.lavalinkPing = validPing;
 
         // Diagnostic logging of voice connection status transitions
-        if (isConnected && !state.hasLoggedConnected) {
-            state.hasLoggedConnected = true;
-            state.voiceDisconnectedChecks = 0;
-            this.logDiagnostic('VOICE_GATEWAY_CONNECTED', {
-                guildId: newPlayer.guildId,
-                nodeId: newPlayer.node?.id || 'unknown',
-                trackIdentifier: newPlayer.queue?.current?.info?.identifier,
-                position: currentPos,
-                detail: `Lavalink connected to Discord voice gateway, ping=${validPing != null ? validPing + 'ms' : 'n/a'}`
-            });
-            // Update dashboard message in-place to clear any voice disconnected banner
-            this.client?.playerController?.updatePlayer?.(newPlayer.guildId, { replace: false }).catch(() => {});
-        } else if (!isConnected && state.hasLoggedConnected) {
-            state.hasLoggedConnected = false;
-            this.logDiagnostic('VOICE_GATEWAY_DISCONNECTED', {
-                guildId: newPlayer.guildId,
-                nodeId: newPlayer.node?.id || 'unknown',
-                trackIdentifier: newPlayer.queue?.current?.info?.identifier,
-                position: currentPos,
-                detail: 'Lavalink lost connection to Discord voice gateway (ping: -1, connected: false)',
-                level: 'warn'
-            });
+        if (isConnected) {
+            state.consecutiveDisconnectedUpdates = 0;
+            if (!state.hasLoggedConnected) {
+                state.hasLoggedConnected = true;
+                state.voiceDisconnectedChecks = 0;
+                this.logDiagnostic('VOICE_GATEWAY_CONNECTED', {
+                    guildId: newPlayer.guildId,
+                    nodeId: newPlayer.node?.id || 'unknown',
+                    trackIdentifier: newPlayer.queue?.current?.info?.identifier,
+                    position: currentPos,
+                    detail: `Lavalink connected to Discord voice gateway, ping=${validPing != null ? validPing + 'ms' : 'n/a'}`
+                });
+                // Update dashboard message in-place to clear any voice disconnected banner
+                this.client?.playerController?.updatePlayer?.(newPlayer.guildId, { replace: false }).catch(() => {});
+            }
+        } else {
+            state.consecutiveDisconnectedUpdates = (state.consecutiveDisconnectedUpdates || 0) + 1;
+            // Transient single-update drops should not cause audio interruption or emergency disconnects.
+            // Only declare disconnected and initiate auto-healing if disconnection is sustained (>= 2 updates).
+            if (state.consecutiveDisconnectedUpdates >= 2 && state.hasLoggedConnected) {
+                state.hasLoggedConnected = false;
+                this.logDiagnostic('VOICE_GATEWAY_DISCONNECTED', {
+                    guildId: newPlayer.guildId,
+                    nodeId: newPlayer.node?.id || 'unknown',
+                    trackIdentifier: newPlayer.queue?.current?.info?.identifier,
+                    position: currentPos,
+                    detail: 'Lavalink lost connection to Discord voice gateway (ping: -1, connected: false)',
+                    level: 'warn'
+                });
 
-            // If bot is still inside a Discord voice channel, immediately trigger auto-healing
-            const guild = this.client?.guilds?.cache?.get(newPlayer.guildId);
-            if (guild?.members?.me?.voice?.channelId) {
-                await this.autoHealVoiceConnection(newPlayer).catch(() => {});
+                // If bot is still inside a Discord voice channel, attempt smooth auto-healing (without resetting gateway session)
+                const guild = this.client?.guilds?.cache?.get(newPlayer.guildId);
+                if (guild?.members?.me?.voice?.channelId) {
+                    await this.autoHealVoiceConnection(newPlayer, { forceGatewayReconnect: false }).catch(() => {});
+                }
             }
         }
 
@@ -521,8 +529,10 @@ class AudioPlaybackMonitor {
     /**
      * Automatically heals Lavalink's connection to the Discord voice gateway when
      * player.connected is false while the bot is inside a Discord voice channel.
+     * Prioritizes soft re-dispatching of cached credentials to prevent tearing down
+     * the Discord voice session and interrupting audio playback.
      */
-    async autoHealVoiceConnection(player) {
+    async autoHealVoiceConnection(player, options = {}) {
         if (!player || !player.guildId) return false;
         const guildId = player.guildId;
         const state = this.getOrCreateState(guildId);
@@ -548,7 +558,7 @@ class AudioPlaybackMonitor {
             nodeId: player.node?.id || 'unknown',
             trackIdentifier: player.queue?.current?.info?.identifier,
             position: player.position || 0,
-            detail: `Attempting voice gateway auto-healing for channel ${channelId}`,
+            detail: `Attempting voice gateway auto-healing for channel ${channelId} (forceReconnect: ${Boolean(options.forceGatewayReconnect)})`,
             level: 'warn'
         });
 
@@ -563,7 +573,11 @@ class AudioPlaybackMonitor {
         const effectiveToken = voiceState?.token || player.voice?.token;
         const effectiveEndpoint = voiceState?.endpoint || player.voice?.endpoint;
 
-        if (effectiveToken && effectiveEndpoint && effectiveSession && player.node?.sessionId) {
+        const hasValidCredentials = Boolean(effectiveToken && effectiveEndpoint && effectiveSession && player.node?.sessionId);
+
+        if (hasValidCredentials) {
+            // Re-dispatch credentials directly to Lavalink's player REST API.
+            // This reconnects Lavalink to the Discord voice server WITHOUT resetting Discord gateway session.
             try {
                 await this.client.voiceHandshakeSynchronizer.dispatchToLavalink(
                     player,
@@ -576,13 +590,23 @@ class AudioPlaybackMonitor {
             } catch (err) {
                 logger.debug(`[AUDIO-MONITOR] Voice gateway credentials dispatch failed: ${err?.message || err}`);
             }
-        }
 
-        // 3. Re-trigger player.connect() to request fresh voice server/state update from Discord gateway
-        try {
-            await player.connect();
-        } catch (connErr) {
-            logger.debug(`[AUDIO-MONITOR] player.connect() voice heal error: ${connErr?.message || connErr}`);
+            // ONLY call player.connect() if explicitly requested (e.g. repeated failure or socket error code),
+            // because player.connect() sends OP 4 which forces Discord to tear down the voice connection and cuts audio.
+            if (options.forceGatewayReconnect) {
+                try {
+                    await player.connect();
+                } catch (connErr) {
+                    logger.debug(`[AUDIO-MONITOR] player.connect() force heal error: ${connErr?.message || connErr}`);
+                }
+            }
+        } else {
+            // Credentials are missing, so player.connect() is genuinely required to ask Discord for them
+            try {
+                await player.connect();
+            } catch (connErr) {
+                logger.debug(`[AUDIO-MONITOR] player.connect() voice heal error: ${connErr?.message || connErr}`);
+            }
         }
 
         return true;
@@ -708,10 +732,13 @@ class AudioPlaybackMonitor {
             if (player.connected === false) {
                 if (isDiscordVoiceConnected && player.playing && !player.paused && currentTrack) {
                     state.voiceDisconnectedChecks = (state.voiceDisconnectedChecks || 0) + 1;
-                    this.autoHealVoiceConnection(player).catch(() => {});
+                    // First 3 checks (~9s): soft re-dispatch credentials to Lavalink
+                    // Check 4+: force fresh gateway handshake via player.connect()
+                    const forceReconnect = state.voiceDisconnectedChecks >= 4;
+                    this.autoHealVoiceConnection(player, { forceGatewayReconnect: forceReconnect }).catch(() => {});
 
-                    // If voice disconnection persists for >= 4 watchdog cycles (~12-16s), recover playback
-                    if (state.voiceDisconnectedChecks >= 4) {
+                    // If voice disconnection persists for >= 8 watchdog cycles (~24s), recover playback
+                    if (state.voiceDisconnectedChecks >= 8) {
                         state.voiceDisconnectedChecks = 0;
                         await this.recoverPlayback(player, currentTrack, {
                             reason: 'voiceGatewayDisconnected',

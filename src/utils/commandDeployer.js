@@ -35,17 +35,17 @@ async function deployCommands(client) {
 
         logger.info(`Successfully registered ${data.length} application (/) commands globally.`);
 
-        // Deploy commands to each active guild for instantaneous visibility in Discord clients
+        // Purge guild-scoped commands for all active guilds to eliminate duplicate slash command entries in Discord UI
         if (client.guilds?.cache?.size > 0) {
             for (const guild of client.guilds.cache.values()) {
                 try {
                     await rest.put(
                         Routes.applicationGuildCommands(client.user.id, guild.id),
-                        { body: commands },
+                        { body: [] },
                     );
-                    logger.debug(`Instant command deployment complete for guild ${guild.name} (${guild.id})`);
+                    logger.debug(`Purged duplicate guild-scoped commands for guild ${guild.name} (${guild.id})`);
                 } catch (gErr) {
-                    logger.debug(`Could not deploy commands to guild ${guild.id}:`, gErr?.message || gErr);
+                    logger.debug(`Could not clear guild-scoped commands for guild ${guild.id}:`, gErr?.message || gErr);
                 }
             }
         }
@@ -58,20 +58,12 @@ deployCommands.deployGuildCommands = async function(client, guildId) {
     const token = process.env.TOKEN || process.env.DISCORD_TOKEN;
     if (!token || !client?.user?.id || !guildId) return;
     try {
-        const commands = [];
-        const seenNames = new Set();
-        client.commands?.forEach(command => {
-            const commandData = command.data.toJSON();
-            if (!seenNames.has(commandData.name)) {
-                seenNames.add(commandData.name);
-                commands.push(commandData);
-            }
-        });
         const rest = new REST({ version: '10' }).setToken(token);
-        await rest.put(Routes.applicationGuildCommands(client.user.id, guildId), { body: commands });
-        logger.info(`Instantly deployed commands to joined guild ${guildId}`);
+        // Clear any guild-specific commands so only single global commands are active, preventing duplicates
+        await rest.put(Routes.applicationGuildCommands(client.user.id, guildId), { body: [] });
+        logger.debug(`Cleared guild-scoped commands for guild ${guildId} to prevent duplicates`);
     } catch (err) {
-        logger.debug(`Error deploying commands to guild ${guildId}:`, err?.message || err);
+        logger.debug(`Error clearing guild commands for guild ${guildId}:`, err?.message || err);
     }
 };
 

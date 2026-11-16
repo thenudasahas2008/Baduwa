@@ -434,7 +434,7 @@ function registerLavalinkEvents(client) {
             client.autoplayEnabled.set(player.guildId, autoplayDefault);
         }
 
-        schedulePlayerUpdate(client, player.guildId, 0, { replace: true, channelId: player.voiceChannelId || player.textChannelId, track });
+        schedulePlayerUpdate(client, player.guildId, 0, { replace: true, channelId: player.textChannelId || player.voiceChannelId, track });
 
         client.activePlayers.set(player.guildId, {
             title: track.info?.title,

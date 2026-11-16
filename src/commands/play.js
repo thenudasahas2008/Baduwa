@@ -1027,7 +1027,7 @@ module.exports = {
                     ]);
                 }
             } else if (typeof client.playerController?.updatePlayer === 'function') {
-                const updatePromise = client.playerController.updatePlayer(guildId, { replace: false, channelId: voiceChannel.id }).catch((err) => {
+                const updatePromise = client.playerController.updatePlayer(guildId, { replace: false, channelId: interaction.channel?.id || voiceChannel.id }).catch((err) => {
                     logger.warn(`Failed to update dashboard for guild ${guildId}:`, err?.message || err);
                 });
                 await Promise.race([

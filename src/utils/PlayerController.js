@@ -102,11 +102,15 @@ class PlayerController {
         const guild = this.client.guilds?.cache?.get(guildId)
             || (this.client.guilds?.fetch ? await this.client.guilds.fetch(guildId).catch(() => null) : null);
 
+        const currentDashboard = this.getDashboard(guildId);
+
         // 1. Resolve connected voice channel
         const connectedVoiceChannelId = activePlayer?.voiceChannelId
             || guild?.members?.me?.voice?.channelId;
 
-        if (connectedVoiceChannelId) {
+        const excludedId = options.excludeChannelId || null;
+
+        if (connectedVoiceChannelId && connectedVoiceChannelId !== excludedId) {
             try {
                 let voiceChannel = this.client.channels?.cache?.get(connectedVoiceChannelId)
                     || guild?.channels?.cache?.get(connectedVoiceChannelId);
@@ -135,14 +139,41 @@ class PlayerController {
                     logger.warn(`[DASHBOARD-DIAG] Connected voice channel ${connectedVoiceChannelId} (${voiceChannel.name || 'voice'}) failed validation: ${permResult.reason}. Falling back to command channel for dashboard visibility.`);
                 }
 
-                // If voiceChannel was not found in Discord or lacked permissions, check if caller explicitly provided a valid channelId or player has textChannelId
-                const fallbackId = options.channelId || activePlayer?.textChannelId;
-                if (fallbackId) {
+                // If voiceChannel was not found in Discord or lacked permissions, check fallback candidates strictly excluding the failing channel
+                const fallbackCandidates = [
+                    options.channelId !== connectedVoiceChannelId ? options.channelId : null,
+                    activePlayer?.textChannelId !== connectedVoiceChannelId ? activePlayer?.textChannelId : null,
+                    this.client?.guildSettings?.get?.(guildId)?.textChannelId,
+                    currentDashboard?.channelId !== connectedVoiceChannelId ? currentDashboard?.channelId : null,
+                ].filter(id => id && id !== excludedId);
+
+                for (const fallbackId of [...new Set(fallbackCandidates)]) {
                     const fallbackChannel = this.client.channels?.cache?.get(fallbackId)
                         || guild?.channels?.cache?.get(fallbackId)
                         || (this.client.channels?.fetch ? await this.client.channels.fetch(fallbackId).catch(() => null) : null);
                     if (fallbackChannel && this.checkChannelPermissions(fallbackChannel, options).ok) {
                         return fallbackChannel;
+                    }
+                }
+
+                // Guild-level fallback: system channel or first accessible text channel in cache
+                if (guild) {
+                    if (guild.systemChannel && guild.systemChannel.id !== connectedVoiceChannelId && guild.systemChannel.id !== excludedId) {
+                        if (this.checkChannelPermissions(guild.systemChannel, options).ok) {
+                            logger.info(`[DASHBOARD-DIAG] Falling back to systemChannel #${guild.systemChannel.name} for guild ${guildId}`);
+                            return guild.systemChannel;
+                        }
+                    }
+
+                    if (guild.channels?.cache?.size > 0) {
+                        for (const ch of guild.channels.cache.values()) {
+                            if (ch.id === connectedVoiceChannelId || ch.id === excludedId) continue;
+                            const isText = typeof ch.isTextBased === 'function' ? ch.isTextBased() : (ch.type === 0 || ch.type === 2);
+                            if (isText && this.checkChannelPermissions(ch, options).ok) {
+                                logger.info(`[DASHBOARD-DIAG] Falling back to accessible channel #${ch.name} (${ch.id}) for guild ${guildId}`);
+                                return ch;
+                            }
+                        }
                     }
                 }
 
@@ -155,7 +186,6 @@ class PlayerController {
         }
 
         // 2. When the bot is not connected to voice, follow existing safe idle behavior and do not invent a voice channel target.
-        const currentDashboard = this.getDashboard(guildId);
         const candidates = [
             this.client?.guildSettings?.get?.(guildId)?.textChannelId,
             options.channelId,
@@ -619,7 +649,19 @@ class PlayerController {
 
                 if (err.code === 50013 || err.code === 50001 || err.status === 403) {
                     logger.warn(`[DASHBOARD-DIAG] [SEND_FAILED] Missing permissions (code ${err.code || 403}) to send replacement dashboard in channel ${channel.id} for guild ${guildId}: ${err?.message || err}`);
-                    return null;
+                    // Fall back to alternative accessible channel in guild if available
+                    const fallbackChannel = await this.resolvePlayerChannel(guildId, { ...options, channelId: null, excludeChannelId: channel.id }, player);
+                    if (fallbackChannel && fallbackChannel.id !== channel.id) {
+                        try {
+                            newMessage = await fallbackChannel.send({ embeds: [embed], components });
+                            channel = fallbackChannel;
+                        } catch (fallbackErr) {
+                            logger.warn(`[DASHBOARD-DIAG] Fallback channel send failed:`, fallbackErr?.message || fallbackErr);
+                            return null;
+                        }
+                    } else {
+                        return null;
+                    }
                 }
 
                 logger.error(`[DASHBOARD-DIAG] [SEND_FAILED] Failed to send replacement dashboard for guild ${guildId}:`, err?.message || err);

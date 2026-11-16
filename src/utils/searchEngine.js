@@ -1105,6 +1105,16 @@ function isRateLimitError(errOrRes) {
     return status === 429 || /429|RATE_LIMITED|rate\s*limited|Too Many Requests/i.test(msg);
 }
 
+function isNodeFailureError(errOrRes) {
+    if (!errOrRes) return false;
+    const msg = String(errOrRes.message || errOrRes.exception?.message || errOrRes.error || errOrRes || '');
+    const status = errOrRes.status || errOrRes.exception?.status || errOrRes.code;
+    return (
+        (typeof status === 'number' && status >= 500) ||
+        /500|502|503|504|Internal Server Error|Bad Gateway|fetch failed|ECONNREFUSED|ETIMEDOUT|Unexpected token '<'|<html/i.test(msg)
+    );
+}
+
 function getDiscordClient(player) {
     return player?.client || player?.LavalinkManager?.options?.client || player?.LavalinkManager?.client;
 }
@@ -1171,12 +1181,14 @@ async function executeSearchMusic(player, trimmed, requestUser, options = {}) {
         }
 
         const isRateLimited = isRateLimitError(res) || isRateLimitError(lastError);
-        if (isRateLimited) {
-            logger.warn(`[SEARCH] Lavalink node rate-limited on YouTube for "${trimmed}". Marking node and migrating...`);
-            markPlayerNodeRateLimited(player, 'YouTube HTTP 429 Rate Limited');
+        const isNodeFailure = isNodeFailureError(res) || isNodeFailureError(lastError);
+        if (isRateLimited || isNodeFailure) {
+            const failReason = isRateLimited ? 'YouTube HTTP 429 Rate Limited' : 'Lavalink Node Backend Error (5xx/HTML)';
+            logger.warn(`[SEARCH] Lavalink node failure (${failReason}) for "${trimmed}". Marking node and migrating...`);
+            markPlayerNodeRateLimited(player, failReason);
             const client = getDiscordClient(player);
             if (client?.lavalinkConnectionManager?.migratePlayerToHealthyNode) {
-                const migrated = await client.lavalinkConnectionManager.migratePlayerToHealthyNode(player, 'youtube-429-rate-limit').catch(() => false);
+                const migrated = await client.lavalinkConnectionManager.migratePlayerToHealthyNode(player, isRateLimited ? 'youtube-429-rate-limit' : 'node-backend-error').catch(() => false);
                 if (migrated) {
                     try {
                         res = await searchWithTimeout(player, { query: classification.canonicalUrl }, requestUser, 8000, options.signal);
@@ -1477,14 +1489,16 @@ async function executeSearchMusic(player, trimmed, requestUser, options = {}) {
             for (const t of fallbackResult.tracks) addCandidate(t);
         }
 
-        // Check if node is rate limited on YouTube
+        // Check if node is rate limited or experiencing backend server errors on YouTube
         const isRateLimited = isRateLimitError(primaryResult) || isRateLimitError(fallbackResult);
-        if (isRateLimited) {
-            logger.warn(`[SEARCH] Lavalink node rate-limited on YouTube text search for "${trimmed}". Marking node and migrating...`);
-            markPlayerNodeRateLimited(player, 'YouTube HTTP 429 Rate Limited (Text Search)');
+        const isNodeFailure = isNodeFailureError(primaryResult) || isNodeFailureError(fallbackResult);
+        if (isRateLimited || isNodeFailure) {
+            const failReason = isRateLimited ? 'YouTube HTTP 429 Rate Limited (Text Search)' : 'Lavalink Node Backend Error (Text Search 5xx/HTML)';
+            logger.warn(`[SEARCH] Lavalink node failure (${failReason}) for "${trimmed}". Marking node and migrating...`);
+            markPlayerNodeRateLimited(player, failReason);
             const client = getDiscordClient(player);
             if (client?.lavalinkConnectionManager?.migratePlayerToHealthyNode) {
-                const migrated = await client.lavalinkConnectionManager.migratePlayerToHealthyNode(player, 'text-search-429-rate-limit').catch(() => false);
+                const migrated = await client.lavalinkConnectionManager.migratePlayerToHealthyNode(player, isRateLimited ? 'text-search-429-rate-limit' : 'node-backend-error').catch(() => false);
                 if (migrated) {
                     try {
                         const [retryYtm, retryYt] = await Promise.all([

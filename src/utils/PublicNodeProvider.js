@@ -45,7 +45,7 @@ const NODE_RATE_LIMIT_COOLDOWN_MS = 60 * 1000; // 1 minute for temporary rate li
 
 const PREFERRED_FAST_HOSTS = [
     'lava-v4.millohost.my.id',
-    'lavalink.nazha.online',
+    'lavalink.jirayu.net',
     'lavalink-v4.triniumhost.com',
 ];
 

@@ -940,11 +940,17 @@ class AudioPlaybackMonitor {
                 level: 'warn'
             });
 
-            // Step 1: In public node mode, ONLY migrate node if this is an actual node failure or genuine stall,
-            // NOT a source-level failure (such as video requiring login or unsupported audio stream)
+            // Step 1: In public node mode, migrate to a healthy node if the node is experiencing
+            // a stall, disconnection, track execution failure, or repeated source errors.
             let migrated = false;
-            const shouldAttemptNodeMigration = !options.isSourceError &&
-                (options.reason === 'stalledPosition' || options.reason === 'nodeDisconnected' || !player.node?.connected);
+            const shouldAttemptNodeMigration = (
+                options.reason === 'trackError' ||
+                options.reason === 'trackStuck' ||
+                options.reason === 'stalledPosition' ||
+                options.reason === 'nodeDisconnected' ||
+                !player.node?.connected ||
+                (options.isSourceError && retries >= 1)
+            );
 
             if (shouldAttemptNodeMigration && this.client?.lavalinkMode === 'public' && this.client?.lavalinkConnectionManager?.migratePlayerToHealthyNode) {
                 migrated = await this.client.lavalinkConnectionManager.migratePlayerToHealthyNode(player, options.reason || 'audio-stall').catch(() => false);

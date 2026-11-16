@@ -329,7 +329,7 @@ function classifyInput(rawInput) {
         type: SUPPORTED_TYPES.UNSUPPORTED_URL,
         originalQuery,
         isUrl: true,
-        error: 'Unsupported URL. ZYRO supports YouTube, YouTube Music, and Spotify links.',
+        error: 'Unsupported URL. Baduwa supports YouTube, YouTube Music, and Spotify links.',
     };
 }
 

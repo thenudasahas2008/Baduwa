@@ -738,7 +738,7 @@ const http = require('node:http');
 const port = process.env.PORT || 3000;
 const keepAliveServer = http.createServer((req, res) => {
     res.writeHead(200, { 'Content-Type': 'text/plain' });
-    res.end('Baduwa / ZYRO Music Bot is Online and Healthy! 🎧');
+    res.end('Baduwa Music Bot is Online and Healthy! 🎧');
 });
 keepAliveServer.listen(port, () => {
     logger.info(`[http] Keep-alive server listening on port ${port}`);

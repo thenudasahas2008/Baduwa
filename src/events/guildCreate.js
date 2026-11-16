@@ -40,7 +40,7 @@ module.exports = {
         if (!channel) return;
 
         welcomedGuilds.add(guild.id);
-        logger.info(`Sending ZYRO welcome message in ${guild.name} (#${channel.name})`);
+        logger.info(`Sending Baduwa welcome message in ${guild.name} (#${channel.name})`);
 
         const embed = buildWelcomeEmbed(client);
         const components = buildWelcomeComponents();

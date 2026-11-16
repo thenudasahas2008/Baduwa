@@ -27,9 +27,9 @@ module.exports = {
         if (health.player.state === 'IDLE' || !health.player.trackAssigned) {
             const idleEmbed = new EmbedBuilder()
                 .setColor(0x7C3AED)
-                .setTitle('🎵 ZYRO Music Playback Status')
+                .setTitle('🎵 Baduwa Music Playback Status')
                 .setDescription('⚪ **No track is currently playing in this server.**\n\nJoin a voice channel and use `/play <song>` to start high-fidelity music streaming!')
-                .setFooter({ text: 'ZYRO Music • Status: Idle' })
+                .setFooter({ text: 'Baduwa Music • Status: Idle' })
                 .setTimestamp();
 
             return safeReply(interaction, { embeds: [idleEmbed], flags: MessageFlags.Ephemeral });
@@ -88,7 +88,7 @@ module.exports = {
                     inline: true,
                 }
             ])
-            .setFooter({ text: 'ZYRO Live Music Info • Run /music-logs for in-depth Lavalink diagnostics' })
+            .setFooter({ text: 'Baduwa Live Music Info • Run /music-logs for in-depth Lavalink diagnostics' })
             .setTimestamp();
 
         return safeReply(interaction, { embeds: [embed], flags: MessageFlags.Ephemeral });

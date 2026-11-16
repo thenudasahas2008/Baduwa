@@ -114,8 +114,8 @@ module.exports = {
         }
 
         const embed = new EmbedBuilder()
-            .setColor(0x7C3AED) // ZYRO Signature Violet
-            .setTitle(`🎵 ZYRO Music Health & Audio Quality Diagnostics`)
+            .setColor(0x7C3AED) // Signature Violet
+            .setTitle(`🎵 Baduwa Music Health & Audio Quality Diagnostics`)
             .setDescription(`**Overall Playback Health:** ${statusEmoji} \`${statusBadge}\`\n${health.statusDetail}`)
             .addFields([
                 {
@@ -187,7 +187,7 @@ module.exports = {
                     inline: false,
                 }
             ])
-            .setFooter({ text: 'ZYRO Live Music Health Diagnostics • Read-only inspection' })
+            .setFooter({ text: 'Baduwa Live Music Health Diagnostics • Read-only inspection' })
             .setTimestamp();
 
         return safeReply(interaction, { embeds: [embed], flags });

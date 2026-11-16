@@ -161,10 +161,10 @@ function createGateEmbed(guild) {
 
     return new EmbedBuilder()
         .setColor(0x7C3AED) // Electric Violet
-        .setAuthor({ name: 'ZYRO • Server Activation Required' })
+        .setAuthor({ name: 'Baduwa • Server Activation Required' })
         .setTitle('⚡ Official Support Server Membership Required')
         .setDescription(
-            `To enable music playback in **${guild?.name || 'this server'}**, the **Server Owner** (${ownerMention}) must be a member of the official **ZYRO Support Server**.\n\n` +
+            `To enable music playback in **${guild?.name || 'this server'}**, the **Server Owner** (${ownerMention}) must be a member of the official **Baduwa Support Server**.\n\n` +
             `**Why is activation required?**\n` +
             `• Receive critical audio node updates, announcements, and uptime notices.\n` +
             `• Get priority direct audio assistance from developer **${OWNER_USERNAME}**.\n` +
@@ -188,7 +188,7 @@ function createGateEmbed(guild) {
                 inline: false,
             },
         ])
-        .setFooter({ text: 'ZYRO Music • Server Activation Policy' })
+        .setFooter({ text: 'Baduwa Music • Server Activation Policy' })
         .setTimestamp();
 }
 

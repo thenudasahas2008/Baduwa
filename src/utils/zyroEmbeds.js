@@ -2,6 +2,7 @@ const { EmbedBuilder } = require('discord.js');
 const { formatDuration } = require('./embeds');
 const { truncateText } = require('./trackSelectMenu');
 const { getPlaybackPosition } = require('./seekManager');
+const { INTENDED_BOT_USERNAME } = require('./branding');
 
 const COLORS = {
     PRIMARY: 0x7C3AED, // Electric Violet (ZYRO signature)

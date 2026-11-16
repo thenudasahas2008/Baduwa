@@ -99,7 +99,7 @@ async function handleSearchNavigation(interaction) {
                     const permissions = voiceChannel.permissionsFor(botMember);
                     if (permissions && (!permissions.has(PermissionsBitField.Flags.Connect) || !permissions.has(PermissionsBitField.Flags.Speak))) {
                         return interaction.followUp({
-                            embeds: [createActionEmbed('error', 'Missing Permissions', `ZYRO requires **Connect** and **Speak** permissions in <#${voiceChannel.id}>.`)],
+                            embeds: [createActionEmbed('error', 'Missing Permissions', `Baduwa requires **Connect** and **Speak** permissions in <#${voiceChannel.id}>.`)],
                             flags: MessageFlags.Ephemeral
                         });
                     }

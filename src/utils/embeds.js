@@ -34,10 +34,10 @@ function createSearchEmbed(client, pageData, query) {
 
     const embed = new EmbedBuilder()
         .setColor(0x7C3AED)
-        .setAuthor({ name: 'ZYRO • SEARCH RESULTS', iconURL: client.user.displayAvatarURL() })
+        .setAuthor({ name: 'Baduwa • SEARCH RESULTS', iconURL: client.user.displayAvatarURL() })
         .setDescription(`Search results for **"${query}"**\n*Select a song from the dropdown menu below to add it to the queue.*`)
         .setFooter({
-            text: `Page ${currentPage}/${totalPages} • ${totalTracks} results • ZYRO Music`
+            text: `Page ${currentPage}/${totalPages} • ${totalTracks} results • Baduwa Music`
         })
         .setTimestamp();
 

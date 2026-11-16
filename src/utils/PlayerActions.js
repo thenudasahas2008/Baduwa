@@ -86,7 +86,7 @@ async function stopPlayer(client, player, options = {}) {
     client.playbackProgressManager?.clearGuild?.(guildId);
     client.audioPlaybackMonitor?.clearGuild?.(guildId);
     client.updatePresence?.();
-    client.voiceChannelStatusManager?.clearStatusForGuild?.(guildId).catch(() => {});
+    client.voiceChannelStatusManager?.clearStatusForGuild?.(guildId, { force: true }).catch(() => {});
 
     // 8. Render stopped/idle dashboard in the connected voice channel's chat
     const channelId = options.channelId || player.voiceChannelId || player.textChannelId;

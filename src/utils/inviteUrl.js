@@ -7,6 +7,8 @@ const REQUIRED_PERMISSIONS = [
     PermissionsBitField.Flags.Speak,
     PermissionsBitField.Flags.ManageMessages,
     PermissionsBitField.Flags.ReadMessageHistory,
+    PermissionsBitField.Flags.SetVoiceChannelStatus,
+    PermissionsBitField.Flags.ManageChannels,
 ];
 
 function generateInviteUrl(clientId) {

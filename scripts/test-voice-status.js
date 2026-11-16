@@ -713,6 +713,30 @@ async function runTests() {
         assert.strictEqual(textChannel.sendCalls.length, 0, 'No text channel messages, embeds, or cards may be posted');
     });
 
+    // -------------------------------------------------------------------------
+    // Test 16: Forced clearStatus clears status when bot is disconnected or after restart
+    // -------------------------------------------------------------------------
+    await asyncCheck('16. Forced clearStatus clears status when bot is disconnected or after restart', async () => {
+        const client = createMockClient();
+        const manager = new VoiceChannelStatusManager(client);
+
+        const guild = createMockGuild('g-forced', 'Forced Clear Server');
+        const channel = createMockChannel('vc-forced', 'Game Voice', guild);
+        guild.channels.cache.set('vc-forced', channel);
+        client.guilds.cache.set('g-forced', guild);
+        client.channels.cache.set('vc-forced', channel);
+
+        // Bot is NOT in the voice channel (disconnected)
+        guild.members.me.voice.channelId = null;
+
+        // Even if managedStatuses is empty (e.g. after process restart), force=true clears the status on Discord
+        assert.strictEqual(manager.managedStatuses.has('vc-forced'), false);
+        const clearRes = await manager.clearStatus('vc-forced', 'g-forced', { force: true });
+        assert.strictEqual(clearRes.success, true);
+        assert.strictEqual(client.rest.putCalls.length, 1);
+        assert.deepStrictEqual(client.rest.putCalls[0].body, { status: '' });
+    });
+
     console.log(`\nAll ${passed} voice channel status tests passed successfully!\n`);
 }
 

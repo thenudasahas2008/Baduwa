@@ -95,7 +95,7 @@ module.exports = {
         const targetVoiceChannelId = player?.voiceChannelId || botVoiceChannel?.id;
         if (targetVoiceChannelId && typeof client.voiceChannelStatusManager?.clearStatus === 'function') {
             await Promise.race([
-                client.voiceChannelStatusManager.clearStatus(targetVoiceChannelId, guildId),
+                client.voiceChannelStatusManager.clearStatus(targetVoiceChannelId, guildId, { force: true }),
                 new Promise(resolve => setTimeout(resolve, 1500))
             ]).catch(() => {});
         }

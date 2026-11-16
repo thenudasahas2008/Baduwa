@@ -187,6 +187,13 @@ module.exports = {
             });
         }
 
+        // Clean up any stale voice channel statuses left over from prior sessions
+        if (client.voiceChannelStatusManager?.cleanupStaleStatusesOnStartup) {
+            client.voiceChannelStatusManager.cleanupStaleStatusesOnStartup().catch((err) => {
+                logger.debug('Error cleaning up stale voice statuses on ready:', err?.message || err);
+            });
+        }
+
         // Reset performance histogram to eliminate synchronous module-load startup skew (~3.28s)
         try {
             const { performanceMonitor } = require('../utils/performanceMonitor');

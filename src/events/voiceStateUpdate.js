@@ -79,6 +79,9 @@ function scheduleEmptyChannelTimeout(client, guildId, channelId) {
         // Stop playback, clear queue, and clean up player and sessions
         const player = client.lavalink?.getPlayer(guildId);
         clearGuildLifecycleTimers(guildId);
+        if (client.voiceChannelStatusManager && channelId) {
+            await client.voiceChannelStatusManager.clearStatus(channelId, guildId, { force: true }).catch(() => {});
+        }
         if (player) {
             await player.stopPlaying(true, false).catch(() => {});
             player.destroy();
@@ -91,7 +94,6 @@ function scheduleEmptyChannelTimeout(client, guildId, channelId) {
 
         client.activePlayers?.delete(guildId);
         client.updatePresence?.();
-        client.voiceChannelStatusManager?.clearStatus(channelId, guildId).catch(() => {});
     }, EMPTY_CHANNEL_TIMEOUT_MS);
 
     emptyChannelTimeouts.set(guildId, { timeout, channelId });
@@ -116,7 +118,7 @@ module.exports = {
 
                 clearEmptyChannelTimeout(guildId);
                 clearGuildLifecycleTimers(guildId);
-                client.voiceChannelStatusManager?.clearStatus(oldState.channelId, guildId).catch(() => {});
+                client.voiceChannelStatusManager?.clearStatus(oldState.channelId, guildId, { force: true }).catch(() => {});
 
                 const is247 = Boolean(client.is247Enabled?.(guildId));
 

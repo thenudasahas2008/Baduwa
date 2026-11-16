@@ -1,5 +1,6 @@
 const { Routes, PermissionsBitField, ChannelType } = require('discord.js');
 const logger = require('./logger');
+const { INTENDED_BOT_USERNAME } = require('./branding');
 
 /**
  * VoiceChannelStatusManager
@@ -267,7 +268,7 @@ class VoiceChannelStatusManager {
 
                 // Check permissions before sending request
                 const permCheck = this.checkPermissions(channel, botMember, isConnected);
-                if (!permCheck.ok) {
+                if (!permCheck.ok && (targetStatus !== '' || !options.force)) {
                     const missingNames = permCheck.permissionNames?.join(' and ') || 'Set Voice Channel Status';
                     logger.warn(
                         `Cannot set voice channel status for guild ${effectiveGuildId || 'unknown'} (#${channel?.name || channelId}): ` +
@@ -317,9 +318,33 @@ class VoiceChannelStatusManager {
                     const errorMessage = error?.message || error?.rawError?.message || String(error);
 
                     if (errorCode === 50013 || httpStatus === 403) {
+                        // Fallback: If clearing status failed due to missing permissions from outside the channel,
+                        // attempt a brief voice connection fallback if bot has CONNECT permission
+                        if (!targetStatus && effectiveGuildId && channelId && !isConnected) {
+                            try {
+                                const player = this.client?.lavalink?.getPlayer?.(effectiveGuildId)
+                                    || this.client?.lavalink?.createPlayer?.({
+                                        guildId: effectiveGuildId,
+                                        voiceChannelId: channelId,
+                                        selfDeaf: true,
+                                        selfMute: true
+                                    });
+                                if (player && typeof player.connect === 'function') {
+                                    await player.connect();
+                                    await this.client.rest.put(route, { body: payload });
+                                    await player.disconnect().catch(() => {});
+                                    this.managedStatuses.delete(channelId);
+                                    logger.info(`Cleared voice channel status in #${channel?.name || channelId} via brief connection fallback`);
+                                    return { success: true, status: '' };
+                                }
+                            } catch (fallbackErr) {
+                                logger.debug(`Brief voice connection fallback to clear status failed:`, fallbackErr?.message || fallbackErr);
+                            }
+                        }
+
                         logger.warn(
                             `Discord rejected voice channel status update in guild ${effectiveGuildId || 'unknown'} (#${channel?.name || channelId}): ` +
-                            `Missing Permissions (HTTP 403, error code 50013). Ensure ZYRO has the "Set Voice Channel Status" permission enabled in role settings.`
+                            `Missing Permissions (HTTP 403, error code 50013). Ensure ${INTENDED_BOT_USERNAME} has the "Set Voice Channel Status" and "Manage Channels" permission enabled in role settings.`
                         );
                     } else if (errorCode === 429 || httpStatus === 429) {
                         logger.warn(
@@ -357,34 +382,35 @@ class VoiceChannelStatusManager {
      * @param {string} [guildId]
      * @returns {Promise<{ success: boolean, skipped?: boolean, reason?: string }>}
      */
-    async clearStatus(channelId, guildId = null) {
+    async clearStatus(channelId, guildId = null, options = {}) {
         if (!channelId) {
             return { success: false, reason: 'missing_channel_id' };
         }
 
-        // Only clear if ZYRO previously set a status on this channel
-        if (!this.managedStatuses.has(channelId)) {
+        // Only clear if ZYRO previously set a status on this channel, unless force=true
+        if (!options.force && !this.managedStatuses.has(channelId)) {
             return { success: true, skipped: true, reason: 'not_managed_by_zyro' };
         }
 
         const channel = this.client?.channels?.cache?.get(channelId);
         // If Discord channel status is exposed and does not match our recorded managed status,
-        // a user changed it manually, so preserve their custom status.
-        if (channel?.status && typeof channel.status === 'string' && channel.status !== this.managedStatuses.get(channelId)) {
+        // a user changed it manually, so preserve their custom status (unless force is requested).
+        if (!options.force && channel?.status && typeof channel.status === 'string' && channel.status !== this.managedStatuses.get(channelId)) {
             logger.debug(`Voice channel #${channel.name || channelId} status was manually changed to "${channel.status}"; leaving untouched.`);
             this.managedStatuses.delete(channelId);
             return { success: true, skipped: true, reason: 'manually_changed' };
         }
 
-        return this.setStatus(channelId, '', guildId, { isConnected: true });
+        return this.setStatus(channelId, '', guildId, { isConnected: true, force: true, ...options });
     }
 
     /**
      * Clears the bot-managed voice channel status for a guild.
      * @param {string} guildId
+     * @param {object} [options]
      * @returns {Promise<{ success: boolean, skipped?: boolean, reason?: string }>}
      */
-    async clearStatusForGuild(guildId) {
+    async clearStatusForGuild(guildId, options = {}) {
         if (!guildId) return { success: false, reason: 'missing_guild_id' };
 
         const player = this.client?.lavalink?.getPlayer?.(guildId);
@@ -392,12 +418,12 @@ class VoiceChannelStatusManager {
         if (!channel) {
             const cachedChannelId = this.guildVoiceChannels.get(guildId);
             if (cachedChannelId) {
-                return this.clearStatus(cachedChannelId, guildId);
+                return this.clearStatus(cachedChannelId, guildId, { force: true, ...options });
             }
             return { success: true, skipped: true, reason: 'no_channel' };
         }
 
-        return this.clearStatus(channel.id, guildId);
+        return this.clearStatus(channel.id, guildId, { force: true, ...options });
     }
 
     /**
@@ -483,6 +509,25 @@ class VoiceChannelStatusManager {
         }
 
         await this.updateFromPlayer(player, player.queue.current, player.paused ? 'paused' : 'playing');
+    }
+
+    /**
+     * Cleans up orphaned or stale voice channel statuses across all guilds on bot startup.
+     */
+    async cleanupStaleStatusesOnStartup() {
+        if (!this.client?.guilds?.cache) return;
+
+        for (const guild of this.client.guilds.cache.values()) {
+            const player = this.client.lavalink?.getPlayer?.(guild.id);
+            const isPlaying = Boolean(player && (player.playing || player.paused) && player.queue?.current);
+
+            if (!isPlaying) {
+                const cachedChannelId = this.guildVoiceChannels.get(guild.id);
+                if (cachedChannelId) {
+                    await this.clearStatus(cachedChannelId, guild.id, { force: true }).catch(() => {});
+                }
+            }
+        }
     }
 
     /**

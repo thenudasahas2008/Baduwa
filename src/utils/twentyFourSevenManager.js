@@ -9,8 +9,8 @@ class TwentyFourSevenManager {
     constructor() {
         // Map<guildId, { generation: number, timer: NodeJS.Timeout, inFlight: boolean, attempts: number, savedState: Object, targetChannelId: string }>
         this.sessions = new Map();
-        this.BACKOFF_DELAYS = [1500, 3500, 7500];
-        this.MAX_ATTEMPTS = 3;
+        this.BACKOFF_DELAYS = [2000, 5000, 10000, 15000, 20000];
+        this.MAX_ATTEMPTS = 10;
     }
 
     /**
@@ -101,8 +101,8 @@ class TwentyFourSevenManager {
             clearTimeout(existing.timer);
         }
 
-        const delay = this.BACKOFF_DELAYS[attempts] || 7500;
-        logger.warn(`[247-LIFECYCLE] ZYRO was disconnected from voice channel in guild ${guildId} while 24/7 is enabled (reason: ${reason}). Scheduling auto-recovery attempt ${attempts + 1}/${this.MAX_ATTEMPTS} in ${delay}ms (gen: ${nextGen})...`);
+        const delay = this.BACKOFF_DELAYS[Math.min(attempts, this.BACKOFF_DELAYS.length - 1)] || 10000;
+        logger.warn(`[247-LIFECYCLE] Baduwa was disconnected from voice channel in guild ${guildId} while 24/7 is enabled (reason: ${reason}). Scheduling auto-recovery attempt ${attempts + 1}/${this.MAX_ATTEMPTS} in ${delay}ms (gen: ${nextGen})...`);
 
         const timer = setTimeout(async () => {
             await this.executeRecovery(client, guildId, nextGen);
@@ -265,7 +265,7 @@ class TwentyFourSevenManager {
 
                 const connectPromise = player.connect();
                 const timeoutPromise = new Promise((_, reject) =>
-                    setTimeout(() => reject(new Error('Voice connection timed out after 5000ms')), 5000)
+                    setTimeout(() => reject(new Error('Voice connection timed out after 15000ms')), 15000)
                 );
 
                 await Promise.race([connectPromise, timeoutPromise]);
@@ -346,9 +346,45 @@ class TwentyFourSevenManager {
                         logger.info(`[247-WATCHDOG] Bot disconnected from 24/7 channel #${voiceChannelId} in guild ${guild.name || guildId}. Auto-rejoining...`);
                         this.sessions.delete(guildId);
                         this.scheduleAutoRecovery(client, guildId, voiceChannelId, 'watchdog_disconnect_detected');
-                    } else if (player && !isPlayerConnected && player.node?.connected) {
+                    } else if (!player) {
+                        // Bot is in voice channel, but Lavalink player was destroyed or missing: recreate player
+                        const mainNode = client.lavalinkConnectionManager?.getActiveNode?.()
+                            || client.lavalink?.nodeManager?.leastUsedNodes?.()?.[0]
+                            || (client.lavalink?.nodeManager?.nodes ? Array.from(client.lavalink.nodeManager.nodes.values()).find(n => n.connected) : null);
+                        if (mainNode && client.lavalink) {
+                            logger.info(`[247-WATCHDOG] Creating missing Lavalink player for 24/7 channel in guild ${guild.name || guildId}...`);
+                            const newPlayer = client.lavalink.createPlayer({
+                                guildId,
+                                voiceChannelId,
+                                textChannelId: settings.textChannelId || null,
+                                node: mainNode.id,
+                                selfDeaf: true,
+                                selfMute: false,
+                            });
+                            newPlayer.connect().catch((pErr) => {
+                                logger.debug(`[247-WATCHDOG] Connect new player caught:`, pErr?.message || pErr);
+                            });
+                        }
+                    } else if (!player.node || !player.node.connected) {
+                        // Player attached to disconnected/dead node: reassign to healthy node
+                        const mainNode = client.lavalinkConnectionManager?.getActiveNode?.()
+                            || client.lavalink?.nodeManager?.leastUsedNodes?.()?.[0]
+                            || (client.lavalink?.nodeManager?.nodes ? Array.from(client.lavalink.nodeManager.nodes.values()).find(n => n.connected) : null);
+                        if (mainNode && mainNode.connected) {
+                            logger.info(`[247-WATCHDOG] Re-attaching player in guild ${guild.name || guildId} to healthy node ${mainNode.id}...`);
+                            if (typeof player.changeNode === 'function') {
+                                player.changeNode(mainNode, false).catch(() => {
+                                    player.node = mainNode;
+                                    player.connect().catch(() => {});
+                                });
+                            } else {
+                                player.node = mainNode;
+                                player.connect().catch(() => {});
+                            }
+                        }
+                    } else if (!isPlayerConnected) {
                         if (player.playing && player.queue?.current && client.audioPlaybackMonitor?.autoHealVoiceConnection) {
-                            client.audioPlaybackMonitor.autoHealVoiceConnection(player, { forceGatewayReconnect: false }).catch(() => {});
+                            client.audioPlaybackMonitor.autoHealVoiceConnection(player, { forceGatewayReconnect: true }).catch(() => {});
                         } else {
                             logger.info(`[247-WATCHDOG] Lavalink player disconnected from voice in guild ${guild.name || guildId} while bot is in channel. Re-connecting player...`);
                             player.connect().catch((pErr) => {

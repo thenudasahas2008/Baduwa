@@ -25,6 +25,18 @@ class GuildSettingsManager {
         } catch (err) {
             logger.warn('Failed to load guild settings from disk:', err?.message || err);
         }
+
+        // Support environment-seeded 24/7 settings (survives ephemeral container restarts)
+        const envGuildId = process.env.TWENTY_FOUR_SEVEN_GUILD_ID || process.env.DEFAULT_247_GUILD_ID;
+        const envVoiceChannelId = process.env.TWENTY_FOUR_SEVEN_VOICE_CHANNEL_ID || process.env.DEFAULT_247_VOICE_CHANNEL_ID || process.env.DEFAULT_247_CHANNEL;
+        if (envGuildId) {
+            const current = this.cache.get(envGuildId) || {};
+            this.cache.set(envGuildId, {
+                ...current,
+                twentyFourSeven: true,
+                voiceChannelId: envVoiceChannelId || current.voiceChannelId,
+            });
+        }
     }
 
     save() {
@@ -119,7 +131,19 @@ class GuildSettingsManager {
     }
 
     is247(guildId) {
-        return Boolean(this.get(guildId).twentyFourSeven);
+        if (!guildId) return false;
+        const s = this.get(guildId);
+        if (typeof s.twentyFourSeven === 'boolean') {
+            return s.twentyFourSeven;
+        }
+        if (process.env.DEFAULT_247_ENABLED === 'true') {
+            return true;
+        }
+        const envGuildId = process.env.TWENTY_FOUR_SEVEN_GUILD_ID || process.env.DEFAULT_247_GUILD_ID;
+        if (envGuildId && envGuildId === guildId) {
+            return true;
+        }
+        return false;
     }
 
     set247(guildId, enabled, options = {}) {

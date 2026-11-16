@@ -469,25 +469,11 @@ function registerLavalinkEvents(client) {
                 return this;
             }
 
-            // Node failover, reconnection failure, or node deletion:
-            // When 24/7 is enabled, do NOT send voice disconnect packet to Discord,
-            // but let lavalink-client clean up its internal player structures with disconnect = false
-            // so no zombie player pointing to a dead node is leaked into the manager.
-            const isNodeTeardown = [
-                "NodeDeleted",
-                "NodeDestroy",
-                "NodeReconnectFail",
-                "DisconnectAllNodes",
-                "ReconnectAllNodes",
-                "PlayerChangeNodeFail",
-                "PlayerChangeNodeFailNoEligibleNode",
-                "NodeMigrationFail",
-                "LavalinkNoVoice",
-                "destroy"
-            ].includes(reason);
-
-            if (is247 && isNodeTeardown) {
-                logger.debug(`Teardown player internally without voice disconnect for 24/7 guild ${player.guildId} (reason: ${reason})`);
+            // Node failover, reconnection failure, socket closure, or any teardown when 24/7 is active:
+            // NEVER send a voice disconnect packet to Discord, but allow lavalink-client to clean up
+            // its internal player structures with disconnect = false so no dead player is leaked.
+            if (is247) {
+                logger.debug(`Teardown player internally without voice disconnect for 24/7 guild ${player.guildId} (reason: ${reason || 'unspecified'})`);
                 player.playing = false;
                 if (player.queue) player.queue.current = null;
                 return originalDestroy(reason, false);
@@ -760,9 +746,14 @@ keepAliveServer.listen(port, () => {
 
     // Self-ping keepalive mechanism for Render Free Tier (prevents 15-minute idle spindown)
     const externalUrl = process.env.RENDER_EXTERNAL_URL
-        || (process.env.RENDER_SERVICE_NAME ? `https://${process.env.RENDER_SERVICE_NAME}.onrender.com` : null);
+        || process.env.HOST_URL
+        || process.env.APP_URL
+        || process.env.URL
+        || process.env.EXTERNAL_URL
+        || (process.env.RENDER_SERVICE_NAME ? `https://${process.env.RENDER_SERVICE_NAME}.onrender.com` : null)
+        || (process.env.PROJECT_DOMAIN ? `https://${process.env.PROJECT_DOMAIN}.glitch.me` : null);
     if (externalUrl) {
-        logger.info(`[http] Render external URL detected: ${externalUrl}. Starting self-ping keep-alive (every 4 minutes)...`);
+        logger.info(`[http] Keep-alive target URL detected: ${externalUrl}. Starting self-ping keep-alive (every 4 minutes)...`);
         const pingInterval = setInterval(() => {
             const clientModule = externalUrl.startsWith('https') ? require('node:https') : require('node:http');
             clientModule.get(externalUrl, (resp) => {

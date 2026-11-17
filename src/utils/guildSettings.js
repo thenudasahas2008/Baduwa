@@ -240,6 +240,25 @@ class GuildSettingsManager {
         return Boolean(this.get(guildId).welcomeMigrated);
     }
 
+    saveLastTrack(guildId, track) {
+        if (!guildId || !track?.info) return;
+        const current = this.get(guildId);
+        current.lastTrack = {
+            title: track.info.title,
+            author: track.info.author,
+            uri: track.info.uri,
+            identifier: track.info.identifier,
+            duration: track.info.duration
+        };
+        this.cache.set(guildId, current);
+        this.save();
+    }
+
+    getLastTrack(guildId) {
+        if (!guildId) return null;
+        return this.get(guildId)?.lastTrack || null;
+    }
+
     setWelcomeMigrated(guildId, { messageId, channelId } = {}) {
         const current = this.get(guildId);
         const updated = {

@@ -698,10 +698,27 @@ async function handleAutoplay(client, player, reason = 'unknown', seedTrack = nu
         return false;
     }
 
+    let lastTrackFallback = null;
+    if (client?.guildSettings?.getLastTrack) {
+        const saved = client.guildSettings.getLastTrack(guildId);
+        if (saved?.title) {
+            lastTrackFallback = {
+                info: {
+                    identifier: saved.identifier || 'saved-seed',
+                    title: saved.title,
+                    author: saved.author || '',
+                    uri: saved.uri || '',
+                    duration: saved.duration || 0
+                }
+            };
+        }
+    }
+
     const seed = seedTrack
         || (typeof player.getData === 'function' ? player.getData('lastPlayedTrack') : null)
         || player.queue?.previous?.[0]
-        || player.queue?.current;
+        || player.queue?.current
+        || lastTrackFallback;
 
     // Deduplication check: prevent multiple rapid triggers for the exact same seed track
     // Only apply suppression if the player is actively playing or queue already has items.

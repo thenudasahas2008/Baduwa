@@ -428,6 +428,9 @@ function registerLavalinkEvents(client) {
         if (typeof player.setData === 'function') {
             player.setData("lastPlayedTrack", track);
         }
+        if (client.guildSettings?.saveLastTrack) {
+            client.guildSettings.saveLastTrack(player.guildId, track);
+        }
 
         if (!client.autoplayEnabled.has(player.guildId)) {
             const autoplayDefault = guildSettings.isAutoplay(player.guildId);
@@ -531,6 +534,8 @@ function registerLavalinkEvents(client) {
             if (isManualStopActive(player.guildId)) return;
             if (player.queue.current) {
                 schedulePlayerUpdate(client, player.guildId, 0, { replace: true, channelId: player.textChannelId });
+            } else if (player.queue?.tracks?.length > 0) {
+                return;
             } else if (!client.autoplayEnabled.get(player.guildId)) {
                 if (!client.is247Enabled(player.guildId)) {
                     cleanupGuildPlayer(client, player.guildId);

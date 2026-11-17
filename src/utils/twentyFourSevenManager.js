@@ -274,12 +274,17 @@ class TwentyFourSevenManager {
                 // 10. Restore playback state safely if playback was active
                 if (session.savedState?.wasPlaying && session.savedState?.track) {
                     try {
+                        const currentTrackId = player.queue?.current?.info?.identifier;
+                        const savedTrackId = session.savedState.track?.info?.identifier;
+                        const isSameTrack = Boolean(!player.queue.current || (currentTrackId && currentTrackId === savedTrackId));
+
                         if (!player.queue.current) {
                             player.queue.current = session.savedState.track;
                         }
                         if (!player.playing) {
-                            await player.play({ position: session.savedState.position || 0 }).catch(() => {});
-                            logger.info(`[247-LIFECYCLE] Restored active playback for "${session.savedState.track.info?.title}" in guild ${guild.name || guildId}`);
+                            const resumePosition = isSameTrack ? (session.savedState.position || 0) : 0;
+                            await player.play({ position: resumePosition }).catch(() => {});
+                            logger.info(`[247-LIFECYCLE] Restored active playback for "${player.queue.current?.info?.title || session.savedState.track.info?.title}" at ${resumePosition}ms in guild ${guild.name || guildId}`);
                         }
                     } catch (playErr) {
                         logger.debug('[247-LIFECYCLE] Error resuming playback after 24/7 recovery:', playErr?.message);
@@ -382,11 +387,10 @@ class TwentyFourSevenManager {
                                 player.connect().catch(() => {});
                             }
                         }
-                    } else if (!isPlayerConnected) {
-                        if (player.playing && player.queue?.current && client.audioPlaybackMonitor?.autoHealVoiceConnection) {
-                            client.audioPlaybackMonitor.autoHealVoiceConnection(player, { forceGatewayReconnect: true }).catch(() => {});
-                        } else {
-                            logger.info(`[247-WATCHDOG] Lavalink player disconnected from voice in guild ${guild.name || guildId} while bot is in channel. Re-connecting player...`);
+                    } else if (!player.playing) {
+                        // Only auto-reconnect idle players to prevent interrupting active audio playback
+                        if (!isPlayerConnected) {
+                            logger.info(`[247-WATCHDOG] Idle 24/7 player disconnected from voice in guild ${guild.name || guildId}. Re-connecting player...`);
                             player.connect().catch((pErr) => {
                                 logger.debug(`[247-WATCHDOG] Re-connect player caught:`, pErr?.message || pErr);
                             });

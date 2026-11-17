@@ -209,9 +209,15 @@ class AudioPlaybackMonitor {
         if (!player || !player.guildId) return;
         const state = this.getOrCreateState(player.guildId);
 
-        if (!state.recoveryPending) {
+        const newTrackId = track?.info?.identifier;
+        const pendingTrackId = state.recoveryPending?.trackIdentifier;
+
+        // If this is a new track or recovery is for a different track,
+        // strictly reset lastPosition to 0 so new tracks NEVER start from the middle!
+        if (!state.recoveryPending || (newTrackId && pendingTrackId && newTrackId !== pendingTrackId)) {
             state.lastPosition = 0;
             state.lastSourceFailure = null;
+            state.recoveryPending = null;
         }
         state.lastProgressTimestamp = Date.now();
         state.trackStartTime = Date.now();
@@ -395,6 +401,7 @@ class AudioPlaybackMonitor {
         if (state) {
             state.stalledChecks = 0;
             state.recoveryPending = null;
+            state.lastPosition = 0; // Always clear lastPosition when a track ends so subsequent tracks start from 0:00!
             state.lastTrackEnd = {
                 timestamp: Date.now(),
                 reason: reasonText,
@@ -1074,7 +1081,12 @@ class AudioPlaybackMonitor {
                 }
 
                 let resumePosition = 0;
-                if (!trackToPlay.info?.isStream && trackToPlay.info?.duration > 0) {
+                const isSameTrack = Boolean(
+                    trackToPlay?.info?.identifier &&
+                    track?.info?.identifier &&
+                    trackToPlay.info.identifier === track.info.identifier
+                );
+                if (isSameTrack && !trackToPlay.info?.isStream && trackToPlay.info?.duration > 0) {
                     const rawPos = Math.max(0, state.lastPosition, Number(player.position || 0));
                     if (rawPos < trackToPlay.info.duration - 2000) {
                         resumePosition = rawPos;

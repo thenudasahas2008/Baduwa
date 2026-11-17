@@ -330,9 +330,14 @@ module.exports = {
             }
             player.client = client;
 
-            if (client.autoplayEnabled && !client.autoplayEnabled.has(guildId)) {
+            if (client.autoplayEnabled) {
                 const guildSettings = require('../utils/guildSettings');
-                client.autoplayEnabled.set(guildId, guildSettings.isAutoplay(guildId));
+                const savedSetting = guildSettings.get(guildId)?.autoplay;
+                const isAuto = typeof savedSetting === 'boolean' ? savedSetting : true;
+                client.autoplayEnabled.set(guildId, isAuto);
+                if (typeof savedSetting !== 'boolean') {
+                    guildSettings.setAutoplay(guildId, true);
+                }
             }
 
             // Always ensure player is attached to activeNode if current node is disconnected

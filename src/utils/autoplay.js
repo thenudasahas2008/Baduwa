@@ -290,20 +290,16 @@ async function fetchComplementaryCandidates(player, lastPlayedTrack) {
         for (const artist of collabs) {
             if (!isGenericArtist(artist) && !artist.includes('channel') && !artist.includes('records') && !artist.includes('entertainment')) {
                 queries.push({ query: `${artist} sinhala songs`, source: 'ytmsearch' });
-                queries.push({ query: `${artist} sinhala songs`, source: 'ytsearch' });
             }
         }
         if (author && !isGenericArtist(author)) {
             queries.push({ query: `${author} sinhala songs`, source: 'ytmsearch' });
-            queries.push({ query: `${author} sinhala songs`, source: 'ytsearch' });
         }
         if (title) {
-            queries.push({ query: `${title} sinhala`, source: 'ytmsearch' });
-            queries.push({ query: `${title} sinhala songs`, source: 'ytsearch' });
+            queries.push({ query: `${title} sinhala songs`, source: 'ytmsearch' });
         }
         queries.push({ query: 'sinhala trending songs', source: 'ytmsearch' });
         queries.push({ query: 'sinhala songs playlist', source: 'ytmsearch' });
-        queries.push({ query: 'sinhala songs playlist', source: 'ytsearch' });
     }
 
     if (context.genre) {
@@ -319,7 +315,7 @@ async function fetchComplementaryCandidates(player, lastPlayedTrack) {
     const searchPromises = queries.map(async (q) => {
         try {
             const timeoutPromise = new Promise((resolve) =>
-                setTimeout(() => resolve(null), 2500)
+                setTimeout(() => resolve(null), 5000)
             );
             const doSearch = async () => {
                 let res = await player.search({ query: q.query, source: q.source }).catch(() => null);

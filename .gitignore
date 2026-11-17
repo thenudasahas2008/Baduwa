@@ -2,7 +2,8 @@
 .env
 
 # runtime state
-data/
+data/*
+!data/guild-settings.json
 
 # dependencies
 node_modules/

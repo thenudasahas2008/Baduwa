@@ -860,13 +860,15 @@ class AudioPlaybackMonitor {
         const guildId = player.guildId;
 
         if (player.queue?.tracks?.length > 0) {
+            logger.info(`[AUDIO-DIAG] Skipping failed track to next queued track for guild ${guildId}`);
             await player.skip().catch(() => {});
             return true;
         }
 
         const isAutoplay = Boolean(
-            this.client?.autoplayEnabled?.get?.(guildId) ||
-            this.client?.guildSettings?.isAutoplay?.(guildId)
+            typeof this.client?.autoplayEnabled?.get === 'function'
+                ? this.client.autoplayEnabled.get(guildId)
+                : (this.client?.guildSettings?.isAutoplay ? this.client.guildSettings.isAutoplay(guildId) : false)
         );
 
         if (isAutoplay) {
@@ -874,18 +876,36 @@ class AudioPlaybackMonitor {
                 const { handleAutoplay } = require('./autoplay');
                 const seed = track || player.queue?.current || (typeof player.getData === 'function' ? player.getData('lastPlayedTrack') : null);
                 logger.info(`[AUDIO-DIAG] Queue empty after track failure in guild ${guildId}; triggering autoplay recovery with seed "${seed?.info?.title || 'unknown'}"`);
-                const started = await handleAutoplay(this.client, player, 'recovery_skip', seed).catch(() => false);
-                if (started || player.playing || player.queue?.current || player.queue?.tracks?.length > 0) {
+                const started = await handleAutoplay(this.client, player, 'recovery_skip', seed).catch((err) => {
+                    logger.warn('[AUDIO-DIAG] handleAutoplay error during recovery skip:', err?.message || err);
+                    return false;
+                });
+                if (started || player.playing || (player.queue?.tracks?.length > 0)) {
                     return true;
+                }
+
+                // If seed-based discovery didn't find anything, perform emergency fallback search so playback never dies
+                if (typeof player.search === 'function') {
+                    const fallbackRes = await player.search({ query: 'sinhala songs hits', source: 'ytsearch' }).catch(() => null);
+                    if (fallbackRes?.tracks?.length > 0) {
+                        const fallbackTrack = fallbackRes.tracks[0];
+                        fallbackTrack.userData = { ...(fallbackTrack.userData || {}), autoplay: true };
+                        await player.queue.add(fallbackTrack);
+                        await player.skip().catch(() => player.play().catch(() => {}));
+                        return true;
+                    }
                 }
             } catch (apErr) {
                 logger.debug('[AUDIO-DIAG] Error attempting autoplay after track skip:', apErr?.message || apErr);
             }
         }
 
-        await player.stopPlaying().catch(() => {});
-        if (this.client?.playerController?.showStoppedState) {
-            this.client.playerController.showStoppedState(guildId);
+        // If autoplay is NOT active, gracefully enter stopped state
+        if (!isAutoplay) {
+            await player.stopPlaying().catch(() => {});
+            if (this.client?.playerController?.showStoppedState) {
+                this.client.playerController.showStoppedState(guildId);
+            }
         }
         return false;
     }

@@ -323,14 +323,30 @@ class TwentyFourSevenManager {
 
         this.watchdogTimer = setInterval(async () => {
             if (!client?.guildSettings || !client?.is247Enabled) return;
-            const entries = client.guildSettings.cache?.entries
-                ? Array.from(client.guildSettings.cache.entries())
-                : [];
+            const guildIds = new Set();
+            if (client.guildSettings?.cache) {
+                for (const g of client.guildSettings.cache.keys()) guildIds.add(g);
+            }
+            if (client.guilds?.cache) {
+                for (const g of client.guilds.cache.keys()) guildIds.add(g);
+            }
 
-            for (const [guildId, settings] of entries) {
-                if (!settings?.twentyFourSeven) continue;
-                const voiceChannelId = settings.voiceChannelId;
-                if (!voiceChannelId) continue;
+            for (const guildId of guildIds) {
+                const settings = client.guildSettings.get(guildId) || {};
+                const is247 = Boolean(client.is247Enabled?.(guildId) || settings?.twentyFourSeven);
+                if (!is247) continue;
+
+                let voiceChannelId = settings.voiceChannelId;
+                if (!voiceChannelId) {
+                    const guild = client.guilds?.cache?.get(guildId);
+                    const botMember = guild?.members?.me;
+                    if (botMember?.voice?.channelId) {
+                        voiceChannelId = botMember.voice.channelId;
+                        client.set247?.(guildId, true, { voiceChannelId });
+                    } else {
+                        continue;
+                    }
+                }
 
                 // If currently actively reconnecting via backoff, skip this tick
                 if (this.isReconnecting(guildId)) continue;

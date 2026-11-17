@@ -1,0 +1,60 @@
+{
+  "test_guild_async": {
+    "volume": 80
+  },
+  "g-toggle-on-test": {
+    "twentyFourSeven": true,
+    "voiceChannelId": "vc-1",
+    "textChannelId": "tc-commands"
+  },
+  "g-toggle-off-test": {
+    "twentyFourSeven": false
+  },
+  "g-fail-test": {
+    "twentyFourSeven": false
+  },
+  "g-defer-test": {
+    "twentyFourSeven": true,
+    "voiceChannelId": "vc-1",
+    "textChannelId": "tc-commands"
+  },
+  "g-fast-audit-test": {
+    "twentyFourSeven": true,
+    "voiceChannelId": "vc-1",
+    "textChannelId": "tc-commands"
+  },
+  "g-conc-test": {
+    "twentyFourSeven": true,
+    "voiceChannelId": "vc-1",
+    "textChannelId": "tc-commands"
+  },
+  "g-stop-247-test": {
+    "twentyFourSeven": true,
+    "voiceChannelId": "vc-1"
+  },
+  "g-leave-policy-test": {
+    "twentyFourSeven": false
+  },
+  "g-stale-cancel-test": {
+    "twentyFourSeven": false
+  },
+  "g-resp-fail-test": {
+    "twentyFourSeven": true,
+    "voiceChannelId": "vc-1",
+    "textChannelId": "tc-commands"
+  },
+  "g-audit-immut-test": {
+    "twentyFourSeven": true,
+    "voiceChannelId": "vc-1",
+    "textChannelId": "tc-commands"
+  },
+  "guild-regression-dashboard": {
+    "dashboardMessageId": "msg-dash-3",
+    "dashboardChannelId": "tc-full-dashboard",
+    "textChannelId": "tc-full-dashboard",
+    "autoplay": true
+  },
+  "guild-test-autoplay-default": {
+    "autoplay": true
+  }
+}

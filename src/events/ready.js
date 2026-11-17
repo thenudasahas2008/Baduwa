@@ -120,6 +120,13 @@ module.exports = {
             }
         }
 
+        // Proactively discover and restore 24/7 presence across restarts/updates from live Discord context
+        if (client.guildSettings?.discoverAndRestoreFromDiscord) {
+            await client.guildSettings.discoverAndRestoreFromDiscord(client).catch((err) => {
+                logger.debug('Failed to discover 24/7 state from Discord on ready:', err?.message || err);
+            });
+        }
+
         // Reconnect 24/7 players across restarts if Lavalink is ready
         if (client.lavalinkConnectionManager?.recover247Connections) {
             client.lavalinkConnectionManager.recover247Connections().catch((err) => {

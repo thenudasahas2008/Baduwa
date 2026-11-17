@@ -785,12 +785,25 @@ class LavalinkConnectionManager {
     }
 
     async _executeRecover247Connections(mainNode) {
-        const entries = this.client.guildSettings.cache?.entries
-            ? Array.from(this.client.guildSettings.cache.entries())
-            : [];
+        if (this.client.guildSettings?.discoverAndRestoreFromDiscord) {
+            await this.client.guildSettings.discoverAndRestoreFromDiscord(this.client).catch(() => {});
+        }
 
-        for (const [guildId, settings] of entries) {
-            if (settings?.twentyFourSeven && settings?.voiceChannelId) {
+        const guildIds = new Set();
+        if (this.client.guildSettings?.cache) {
+            for (const g of this.client.guildSettings.cache.keys()) guildIds.add(g);
+        }
+        if (this.client.guilds?.cache) {
+            for (const g of this.client.guilds.cache.keys()) guildIds.add(g);
+        }
+
+        for (const guildId of guildIds) {
+            const settings = this.client.guildSettings?.get?.(guildId) || {};
+            const is247 = Boolean(this.client.is247Enabled?.(guildId) || settings?.twentyFourSeven);
+            if (!is247) continue;
+
+            const voiceChannelId = settings?.voiceChannelId;
+            if (voiceChannelId) {
                 // Prevent duplicate recovery if twentyFourSevenManager is already actively reconnecting this guild
                 if (this.client.twentyFourSevenManager?.isReconnecting?.(guildId)) {
                     continue;

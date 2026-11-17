@@ -252,6 +252,113 @@ class GuildSettingsManager {
         this.save();
         return updated;
     }
+
+    /**
+     * Proactively discovers and restores 24/7 settings from live Discord state across restarts/updates:
+     * 1. Inspects active Discord voice channel presence of the bot member.
+     * 2. Scans recent bot dashboard embeds for "24/7 Mode Active" markers and voice channel mentions.
+     * 3. Fallback resolution to active or canonical voice channels when 24/7 is enabled.
+     */
+    async discoverAndRestoreFromDiscord(client) {
+        if (!client?.guilds?.cache) return;
+
+        for (const [guildId, guild] of client.guilds.cache.entries()) {
+            try {
+                let current = this.cache.get(guildId) || {};
+                let is247 = Boolean(current.twentyFourSeven);
+                let voiceChannelId = current.voiceChannelId;
+                let textChannelId = current.textChannelId;
+
+                // 1. If bot is currently in a voice channel in this guild, preserve it immediately
+                const botMember = guild.members?.me
+                    || (typeof guild.members?.fetch === 'function' ? await guild.members.fetch(client.user?.id).catch(() => null) : null);
+                if (botMember?.voice?.channelId) {
+                    voiceChannelId = botMember.voice.channelId;
+                    is247 = true;
+                    logger.info(`[247-PERSIST] Auto-detected active voice connection in #${voiceChannelId} for guild ${guild.name || guildId}. Preserving 24/7 presence across update.`);
+                }
+
+                // 2. If not yet determined, search recent channels for existing dashboard with "24/7 Mode Active"
+                if (!is247 || !voiceChannelId) {
+                    const channels = guild.channels?.cache ? Array.from(guild.channels.cache.values()) : [];
+                    for (const ch of channels) {
+                        if (!ch.isTextBased?.() || typeof ch.messages?.fetch !== 'function') continue;
+                        try {
+                            const perms = ch.permissionsFor?.(botMember);
+                            if (perms && (!perms.has('ViewChannel') || !perms.has('ReadMessageHistory'))) continue;
+
+                            const recentMsgs = await ch.messages.fetch({ limit: 10 }).catch(() => null);
+                            if (!recentMsgs) continue;
+
+                            for (const [, msg] of recentMsgs) {
+                                if (msg.author?.id !== client.user?.id) continue;
+                                const embed = msg.embeds?.[0];
+                                if (!embed) continue;
+
+                                const footerText = embed.footer?.text || '';
+                                const descText = embed.description || '';
+
+                                if (footerText.includes('24/7 Mode Active') || descText.includes('remains connected in')) {
+                                    is247 = true;
+                                    textChannelId = ch.id;
+
+                                    const match = descText.match(/<#(\d+)>/);
+                                    if (match && match[1]) {
+                                        voiceChannelId = match[1];
+                                    } else if (ch.isVoiceBased?.()) {
+                                        voiceChannelId = ch.id;
+                                    }
+                                    logger.info(`[247-PERSIST] Discovered previous 24/7 dashboard in #${ch.name} (voice: #${voiceChannelId || 'unknown'}) for guild ${guild.name || guildId}`);
+                                    break;
+                                }
+                            }
+                            if (is247 && voiceChannelId) break;
+                        } catch (_) {}
+                    }
+                }
+
+                // 3. Fallback for 24/7 enabled guilds without a specific voice channel:
+                // If 24/7 is enabled (or DEFAULT_247_ENABLED=true) but voiceChannelId is still unset,
+                // pick the best voice channel (channel with human members, or named game/music/voice/general)
+                if ((is247 || process.env.DEFAULT_247_ENABLED === 'true') && !voiceChannelId) {
+                    const voiceChannels = guild.channels?.cache
+                        ? Array.from(guild.channels.cache.values()).filter(c => (typeof c.isVoiceBased === 'function' && c.isVoiceBased()) || c.type === 2 || c.type === 13)
+                        : [];
+
+                    let bestVc = voiceChannels.find(c => {
+                        const humanMembers = c.members ? Array.from(c.members.values()).filter(m => !m.user?.bot) : [];
+                        return humanMembers.length > 0;
+                    });
+
+                    if (!bestVc) {
+                        bestVc = voiceChannels.find(c => /game|music|voice|chill|general/i.test(c.name));
+                    }
+
+                    if (!bestVc && voiceChannels.length > 0) {
+                        bestVc = voiceChannels.find(c => {
+                            const p = c.permissionsFor?.(botMember);
+                            return !p || p.has('Connect');
+                        }) || voiceChannels[0];
+                    }
+
+                    if (bestVc) {
+                        voiceChannelId = bestVc.id;
+                        is247 = true;
+                        logger.info(`[247-PERSIST] Resolved voice channel #${bestVc.name} (${bestVc.id}) for 24/7 guild ${guild.name || guildId}`);
+                    }
+                }
+
+                if (is247) {
+                    this.set247(guildId, true, { voiceChannelId, textChannelId });
+                    if (typeof this.get(guildId).autoplay !== 'boolean') {
+                        this.setAutoplay(guildId, true);
+                    }
+                }
+            } catch (err) {
+                logger.debug(`[247-PERSIST] Discovery error for guild ${guildId}:`, err?.message || err);
+            }
+        }
+    }
 }
 
 module.exports = new GuildSettingsManager();

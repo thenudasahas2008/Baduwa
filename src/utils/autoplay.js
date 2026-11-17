@@ -665,7 +665,11 @@ async function handleAutoplay(client, player, reason = 'unknown', seedTrack = nu
     }
 
     // Setting check: must be enabled
-    if (!client?.autoplayEnabled?.get(guildId)) {
+    const autoplayEnabled = client?.autoplayEnabled
+        ? client.autoplayEnabled.get(guildId)
+        : (client?.guildSettings?.isAutoplay ? client.guildSettings.isAutoplay(guildId) : false);
+
+    if (!autoplayEnabled) {
         return false;
     }
 
@@ -686,15 +690,15 @@ async function handleAutoplay(client, player, reason = 'unknown', seedTrack = nu
     }
 
     // If upcoming queue already has tracks:
-    if (player.queue?.tracks?.length > 0) {
+    if (player.queue?.tracks?.length > 0 && reason !== 'recovery_skip') {
         if (!player.queue.current && !player.playing) {
             await player.play().catch(() => {});
         }
         return false;
     }
 
-    // If already playing a current track:
-    if (player.playing && player.queue?.current) {
+    // If already playing a current track (exempt recovery_skip because current track is dead/failed):
+    if (player.playing && player.queue?.current && reason !== 'recovery_skip') {
         return false;
     }
 
@@ -740,13 +744,16 @@ async function handleAutoplay(client, player, reason = 'unknown', seedTrack = nu
             return false;
         }
 
-        if (!client?.autoplayEnabled?.get(guildId)) {
+        const stillEnabled = client?.autoplayEnabled
+            ? client.autoplayEnabled.get(guildId)
+            : (client?.guildSettings?.isAutoplay ? client.guildSettings.isAutoplay(guildId) : false);
+        if (!stillEnabled) {
             logger.info(`[AUTOPLAY] Autoplay was disabled during search for guild ${guildId}`);
             return false;
         }
 
         // Did user manually enqueue tracks while discovery was in flight?
-        if (player.queue?.tracks?.length > 0) {
+        if (player.queue?.tracks?.length > 0 && reason !== 'recovery_skip') {
             logger.info(`[AUTOPLAY] User queued tracks during autoplay discovery for ${guildId}; preserving user queue.`);
             if (!player.queue.current && !player.playing) {
                 await player.play().catch(() => {});
@@ -755,7 +762,7 @@ async function handleAutoplay(client, player, reason = 'unknown', seedTrack = nu
         }
 
         // Did playback start in the meantime?
-        if (player.playing && player.queue?.current) {
+        if (player.playing && player.queue?.current && reason !== 'recovery_skip') {
             logger.info(`[AUTOPLAY] Playback already started during discovery for guild ${guildId}`);
             return false;
         }
@@ -786,6 +793,16 @@ async function handleAutoplay(client, player, reason = 'unknown', seedTrack = nu
             }
         }
 
+        const performSearch = async (query) => {
+            if (typeof player.search === 'function') {
+                return player.search({ query, source: 'ytsearch' }).catch(() => null);
+            }
+            if (typeof client?.lavalink?.search === 'function') {
+                return client.lavalink.search({ query, source: 'ytsearch' }, player).catch(() => null);
+            }
+            return null;
+        };
+
         // Emergency fallback: search related music on YouTube if candidate pool ran dry
         if (eligibleTracks.length === 0) {
             const queryArtist = cleanAuthor(seed?.userData?.spotifyArtist || seed?.info?.author || '');
@@ -795,9 +812,23 @@ async function handleAutoplay(client, player, reason = 'unknown', seedTrack = nu
                 : (queryTitle ? `${queryTitle} song` : 'top hits songs');
 
             logger.info(`[AUTOPLAY] Candidates exhausted; running emergency fallback search for guild ${guildId}: "${fallbackQuery}"`);
-            const fallbackRes = await player.search({ query: fallbackQuery, source: 'ytsearch' }).catch(() => null);
+            const fallbackRes = await performSearch(fallbackQuery);
             if (fallbackRes?.tracks?.length > 0) {
                 eligibleTracks = fallbackRes.tracks.filter(t => {
+                    if (!t?.info?.identifier) return false;
+                    if (currentId && t.info.identifier === currentId) return false;
+                    if (upcomingIds.has(t.info.identifier)) return false;
+                    return true;
+                });
+            }
+        }
+
+        // Universal emergency fallback: if specific artist/song search yielded 0, query popular music
+        if (eligibleTracks.length === 0) {
+            logger.info(`[AUTOPLAY] Candidates exhausted; running universal fallback search for guild ${guildId}`);
+            const universalRes = await performSearch('sinhala songs hits');
+            if (universalRes?.tracks?.length > 0) {
+                eligibleTracks = universalRes.tracks.filter(t => {
                     if (!t?.info?.identifier) return false;
                     if (currentId && t.info.identifier === currentId) return false;
                     if (upcomingIds.has(t.info.identifier)) return false;
@@ -822,14 +853,23 @@ async function handleAutoplay(client, player, reason = 'unknown', seedTrack = nu
         logger.info(`[AUTOPLAY-DIAG] guild=${guildId} stage=playback_requested elapsed=${Date.now() - autoplayStart}ms`);
 
         // Add candidate(s) to queue
-        await player.queue.add(tracksToQueue);
+        if (typeof player.queue?.add === 'function') {
+            await player.queue.add(tracksToQueue);
+        } else if (Array.isArray(player.queue?.tracks)) {
+            player.queue.tracks.push(...tracksToQueue);
+        }
 
-        // If called outside of autoPlayFunction, start playback if player is idle and not stopped
+        // If called outside of autoPlayFunction, start playback if player is idle or needs recovery skip
         if (reason !== 'autoPlayFunction') {
             if (isManualStopActive(guildId) || player.getData?.("internal_stopPlaying") || player.getData?.("internal_autoplayStopPlaying")) {
                 return false;
             }
-            if (!player.queue.current && !player.playing) {
+            if (reason === 'recovery_skip') {
+                // In recovery skip, skip the failed current track and immediately play the newly added candidate track
+                await player.skip().catch(() => {
+                    return player.play().catch(() => {});
+                });
+            } else if (!player.queue.current && !player.playing) {
                 await player.play().catch((err) => {
                     logger.debug('Autoplay player.play() error:', err?.message || err);
                 });

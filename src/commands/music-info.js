@@ -36,7 +36,7 @@ module.exports = {
         }
 
         // Status badge
-        let statusBadge = '🟢 Healthy & Streaming';
+        let statusBadge = health.player?.isProgressing ? '🟢 Healthy & Streaming' : '🟡 Playback Telemetry Pending';
         if (health.status === 'POSITION_STALLED') {
             statusBadge = '🔴 Stalled (Audio buffer frozen)';
         } else if (health.status === 'SOURCE_FAILURE') {
@@ -49,6 +49,8 @@ module.exports = {
             statusBadge = '🟡 Recovering Stream';
         } else if (health.player.state === 'PAUSED') {
             statusBadge = '🟠 Playback Paused';
+        } else if (health.status === 'HEALTHY') {
+            statusBadge = '🟢 Healthy & Streaming';
         }
 
         // Progress bar calculation

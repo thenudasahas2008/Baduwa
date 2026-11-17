@@ -385,10 +385,21 @@ function registerLavalinkEvents(client) {
         if (!shouldNotify) return;
 
         logger.error(
-            `Playback failed ${consecutive} times in a row in guild ${guildId}; stopping playback.\n` +
+            `Playback failed ${consecutive} times in a row in guild ${guildId}; checking queue state.\n` +
             `  - Is the source blocked?  docker compose logs lavalink | grep -iE "AllClientsFailed|Sign in to confirm"\n` +
             `  - Is the config current?  docker compose exec lavalink cat /opt/Lavalink/application.yml`
         );
+
+        // If the queue has remaining tracks, do NOT wipe the user's entire playlist!
+        // Instead, migrate to a healthy node and advance to the next track.
+        if (player?.queue?.tracks?.length > 0) {
+            logger.warn(`[PLAYBACK-RECOVERY] Repeated failures in guild ${guildId}, but queue has ${player.queue.tracks.length} remaining tracks. Attempting node migration instead of stopping.`);
+            if (client.lavalinkMode === 'public' && client.lavalinkConnectionManager?.migratePlayerToHealthyNode) {
+                await client.lavalinkConnectionManager.migratePlayerToHealthyNode(player, 'consecutive-track-failures').catch(() => false);
+            }
+            await player.skip().catch(() => {});
+            return;
+        }
 
         // Breaks the autoplay half of the loop. autoSkip is a library option we do not own,
         // so stopPlaying() below is what stops the drain - and it races the autoSkip already

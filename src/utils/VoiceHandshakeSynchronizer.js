@@ -170,9 +170,11 @@ class VoiceHandshakeSynchronizer {
         const now = Date.now();
         const entry = this.voiceStates.get(guildId);
         
-        // Cryptographic digest of the credential tuple to prevent storing raw plaintext credentials in deduplication key
+        // Cryptographic digest of node + credential tuple to allow immediate re-dispatch when migrating nodes
+        // while safely preventing duplicate REST updatePlayer calls for identical credentials on the same node
+        const nodeId = player.node?.id || player.node?.sessionId || 'default';
         const dispatchFingerprint = crypto.createHash('sha256')
-            .update(`${token}:${endpoint}:${sessionId}:${channelId || ''}`)
+            .update(`${nodeId}:${token}:${endpoint}:${sessionId}:${channelId || ''}`)
             .digest('hex');
         
         // Single authoritative path: prevent duplicate REST updatePlayer calls for identical credentials
@@ -238,6 +240,17 @@ class VoiceHandshakeSynchronizer {
         if (entry) {
             entry.lastDispatchedFingerprint = null;
         }
+    }
+
+    /**
+     * Re-apply cached voice credentials immediately to a player (e.g. after node migration or reconnect)
+     */
+    async reapplyVoiceCredentials(player) {
+        if (!player || !player.guildId) return false;
+        const entry = this.voiceStates.get(player.guildId);
+        if (!entry || !entry.token || !entry.endpoint || !entry.sessionId) return false;
+        this.invalidateFingerprint(player.guildId);
+        return await this.dispatchToLavalink(player, player.guildId, entry.token, entry.endpoint, entry.sessionId, entry.channelId);
     }
 
     /**

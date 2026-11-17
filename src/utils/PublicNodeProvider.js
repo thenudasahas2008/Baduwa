@@ -44,9 +44,13 @@ const NODE_AUTH_COOLDOWN_MS = 15 * 60 * 1000; // 15 minutes for auth failure
 const NODE_RATE_LIMIT_COOLDOWN_MS = 60 * 1000; // 1 minute for temporary rate limits
 
 const PREFERRED_FAST_HOSTS = [
-    'lava-v4.millohost.my.id',
     'lavalink.jirayu.net',
-    'lavalink-v4.triniumhost.com',
+    'lavalinkv4.serenetia.com',
+    'lavalink.nazha.online',
+];
+
+const BLOCKED_PUBLIC_HOSTS = [
+    'lava-v4.millohost.my.id', // HTTP 403 / auth rejection / -29000ms latency clock skew
 ];
 
 class PublicNodeProvider {
@@ -315,6 +319,10 @@ class PublicNodeProvider {
         if (node.version !== 'v4') return null;
 
         const host = normalizeHost(node.host);
+        if (BLOCKED_PUBLIC_HOSTS.includes(host)) {
+            logger.debug(`Rejected blocked/broken public host: ${host}`);
+            return null;
+        }
         const port = Number(node.port);
         const password = typeof node.password === 'string' ? node.password.trim() : '';
         // lavalink-client strictly enforces: if secure is true, port must be 443

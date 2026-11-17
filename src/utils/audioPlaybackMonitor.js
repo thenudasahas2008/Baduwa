@@ -1008,6 +1008,8 @@ class AudioPlaybackMonitor {
                 options.reason === 'trackError' ||
                 options.reason === 'trackStuck' ||
                 options.reason === 'stalledPosition' ||
+                options.reason === 'recoveryVerificationFailed' ||
+                options.reason === 'consecutive-track-failures' ||
                 options.reason === 'nodeDisconnected' ||
                 !player.node?.connected ||
                 (options.isSourceError && retries >= 1)
@@ -1288,7 +1290,7 @@ class AudioPlaybackMonitor {
         // 6. Position stalled
         const elapsedSinceProgress = now - state.lastProgressTimestamp;
         const initialGracePeriod = (now - state.trackStartTime < INITIAL_GRACE_PERIOD_MS);
-        if (player.playing && !initialGracePeriod && elapsedSinceProgress >= STALL_THRESHOLD_MS && state.stalledChecks >= 1) {
+        if (player.playing && !initialGracePeriod && elapsedSinceProgress >= STALL_THRESHOLD_MS) {
             return {
                 status: 'POSITION_STALLED',
                 detail: `Playback position has not progressed for ${Math.round(elapsedSinceProgress / 1000)}s while player reports playing: true.`

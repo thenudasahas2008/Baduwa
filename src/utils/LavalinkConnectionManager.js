@@ -545,6 +545,9 @@ class LavalinkConnectionManager {
                         logger.info(`Migrating player for guild ${player.guildId} from ${player.node?.id || 'disconnected'} to ${newNode.id}...`);
                         await player.changeNode(newNode, false);
                         logger.info(`Successfully migrated player for guild ${player.guildId} to ${newNode.id}`);
+                        if (this.client.voiceHandshakeSynchronizer?.reapplyVoiceCredentials) {
+                            await this.client.voiceHandshakeSynchronizer.reapplyVoiceCredentials(player).catch(() => {});
+                        }
                         this.client.voiceChannelStatusManager?.updateFromPlayer(player, player.queue?.current, player.paused ? 'paused' : 'playing').catch(() => {});
                     } catch (migErr) {
                         logger.warn(`Failed to migrate player for guild ${player.guildId}: ${migErr?.message || migErr}`);
@@ -743,6 +746,9 @@ class LavalinkConnectionManager {
                 try {
                     await player.changeNode(targetNode, false);
                     logger.info(`Successfully migrated player for guild ${player.guildId} to ${targetNode.id}`);
+                    if (this.client.voiceHandshakeSynchronizer?.reapplyVoiceCredentials) {
+                        await this.client.voiceHandshakeSynchronizer.reapplyVoiceCredentials(player).catch(() => {});
+                    }
                     this.client.voiceChannelStatusManager?.updateFromPlayer(player, player.queue?.current, player.paused ? 'paused' : 'playing').catch(() => {});
                     return true;
                 } catch (migErr) {

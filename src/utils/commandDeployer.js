@@ -36,17 +36,43 @@ async function deployCommands(client) {
         logger.info(`Successfully registered ${data.length} application (/) commands globally.`);
 
         // Purge guild-scoped commands for all active guilds to eliminate duplicate slash command entries in Discord UI
-        if (client.guilds?.cache?.size > 0) {
-            for (const guild of client.guilds.cache.values()) {
-                try {
-                    await rest.put(
-                        Routes.applicationGuildCommands(client.user.id, guild.id),
-                        { body: [] },
-                    );
-                    logger.debug(`Purged duplicate guild-scoped commands for guild ${guild.name} (${guild.id})`);
-                } catch (gErr) {
-                    logger.debug(`Could not clear guild-scoped commands for guild ${guild.id}:`, gErr?.message || gErr);
+        let guilds = [];
+        try {
+            if (typeof client.guilds?.fetch === 'function') {
+                const fetched = await client.guilds.fetch().catch(() => null);
+                if (fetched) {
+                    guilds = Array.from(fetched.values());
                 }
+            }
+        } catch (_) {}
+        if (!guilds.length && client.guilds?.cache?.size > 0) {
+            guilds = Array.from(client.guilds.cache.values());
+        }
+
+        // Also include any guild IDs known in guild settings
+        const knownGuildIds = new Set(guilds.map(g => g.id || g));
+        try {
+            const guildSettings = client.guildSettings || require('./guildSettings');
+            if (guildSettings?.cache) {
+                for (const gId of guildSettings.cache.keys()) {
+                    if (!knownGuildIds.has(gId)) {
+                        knownGuildIds.add(gId);
+                        guilds.push({ id: gId, name: gId });
+                    }
+                }
+            }
+        } catch (_) {}
+
+        for (const guild of guilds) {
+            const gId = guild.id || guild;
+            try {
+                await rest.put(
+                    Routes.applicationGuildCommands(client.user.id, gId),
+                    { body: [] },
+                );
+                logger.info(`Purged duplicate guild-scoped commands for guild ${guild.name || gId} (${gId})`);
+            } catch (gErr) {
+                logger.debug(`Could not clear guild-scoped commands for guild ${gId}:`, gErr?.message || gErr);
             }
         }
     } catch (error) {

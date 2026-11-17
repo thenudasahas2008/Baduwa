@@ -14,6 +14,7 @@ const logger = require('../utils/logger');
 
 // Debounce map to prevent rapid button-clicking race conditions
 const playerActionCooldowns = new Map();
+const purgedGuildCommands = new Set();
 
 async function handlePlayerInteraction(interaction, action, args = []) {
     const { client } = interaction;
@@ -588,6 +589,16 @@ module.exports = {
         if (shouldCheckIdempotency && idempotencyTracker.checkAndRecord(interaction.id)) {
             logger.debug(`[INTERACTION-DIAG] Duplicate interaction ${interaction.id} ignored`);
             return;
+        }
+
+        // Purge any legacy guild-scoped commands for this guild to ensure no duplicate slash commands exist in UI
+        const currentGuildId = interaction.guildId || interaction.guild?.id;
+        if (currentGuildId && !purgedGuildCommands.has(currentGuildId)) {
+            purgedGuildCommands.add(currentGuildId);
+            const deployCommands = require('../utils/commandDeployer');
+            if (typeof deployCommands?.deployGuildCommands === 'function') {
+                deployCommands.deployGuildCommands(interaction.client, currentGuildId).catch(() => {});
+            }
         }
 
         try {

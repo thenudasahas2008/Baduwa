@@ -84,8 +84,35 @@ async function run() {
     assert.strictEqual(connectCalled, false, 'Watchdog must NEVER call player.connect() while player is playing');
     console.log('  ok  - 4. Watchdog avoids calling player.connect() during active playback');
 
+    // 4. Test advanceOrAutoplay does not call stopPlaying when autoplay is enabled
+    let stopPlayingCalled = false;
+    let skipCalled = false;
+    const testPlayer = {
+        guildId: 'g-autoplay-adv',
+        playing: false,
+        queue: {
+            current: { info: { title: 'Failed Song', identifier: 'id-fail' } },
+            tracks: [] // Empty queue
+        },
+        skip: async () => { skipCalled = true; },
+        stopPlaying: async () => { stopPlayingCalled = true; },
+        getData: () => null,
+        setData: () => {}
+    };
+
+    const monitorWithClient = new AudioPlaybackMonitor({
+        autoplayEnabled: new Map([['g-autoplay-adv', true]]),
+        lavalink: {
+            search: async () => ({ tracks: [{ info: { title: 'Autoplay Success', identifier: 'ap-1' } }] })
+        }
+    });
+
+    const advanced = await monitorWithClient.advanceOrAutoplay(testPlayer, testPlayer.queue.current);
+    assert.strictEqual(stopPlayingCalled, false, 'advanceOrAutoplay must NOT call stopPlaying when autoplay is enabled');
+    console.log('  ok  - 5. advanceOrAutoplay triggers autoplay discovery and avoids stopping playback');
+
     console.log('\n========================================');
-    console.log('Track Position Reset Tests: 4/4 passed');
+    console.log('Track Position Reset Tests: 5/5 passed');
     console.log('========================================');
 }
 

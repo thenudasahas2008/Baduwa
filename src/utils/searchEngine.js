@@ -1622,13 +1622,28 @@ async function resolveAlternativeTrack(player, track) {
 
     const originalTitle = track.info.title;
     const originalAuthor = track.info.author || '';
-    const query = `${originalTitle} ${originalAuthor}`.trim();
+
+    // Clean title by stripping pipe (| ...), brackets, and noise words (Official Audio/Video)
+    const cleanedTitle = String(originalTitle)
+        .replace(/\|.*$/g, '')
+        .replace(/\s*[\(\[][^\]\)]*[\)\]]/g, '')
+        .replace(/[\s\-_]+(official\s*(music\s*)?video|official\s*(music\s*)?audio|visualizer|audio|video|hd|hq|4k|lyric\s*video|lyrics?)\s*$/i, '')
+        .trim();
+
+    const query = `${cleanedTitle || originalTitle} ${originalAuthor}`.trim();
 
     try {
-        const searchResult = await player.search({
+        let searchResult = await player.search({
             query,
             source: 'ytsearch'
-        }, track.requester);
+        }, track.requester).catch(() => null);
+
+        if (!searchResult?.tracks?.length) {
+            searchResult = await player.search({
+                query,
+                source: 'ytmsearch'
+            }, track.requester).catch(() => null);
+        }
 
         if (!searchResult?.tracks?.length) return null;
 

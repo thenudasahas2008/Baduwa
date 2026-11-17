@@ -850,6 +850,47 @@ class AudioPlaybackMonitor {
     }
 
     /**
+     * Safely advances playback when a track fails or is interrupted:
+     * If queue has remaining tracks, skips to the next track.
+     * If queue is empty and autoplay is enabled, seamlessly triggers Autoplay so music never stops.
+     * Only enters stopped state if autoplay is disabled or exhausted.
+     */
+    async advanceOrAutoplay(player, track) {
+        if (!player || !player.guildId) return false;
+        const guildId = player.guildId;
+
+        if (player.queue?.tracks?.length > 0) {
+            await player.skip().catch(() => {});
+            return true;
+        }
+
+        const isAutoplay = Boolean(
+            this.client?.autoplayEnabled?.get?.(guildId) ||
+            this.client?.guildSettings?.isAutoplay?.(guildId)
+        );
+
+        if (isAutoplay) {
+            try {
+                const { handleAutoplay } = require('./autoplay');
+                const seed = track || player.queue?.current || (typeof player.getData === 'function' ? player.getData('lastPlayedTrack') : null);
+                logger.info(`[AUDIO-DIAG] Queue empty after track failure in guild ${guildId}; triggering autoplay recovery with seed "${seed?.info?.title || 'unknown'}"`);
+                const started = await handleAutoplay(this.client, player, 'recovery_skip', seed).catch(() => false);
+                if (started || player.playing || player.queue?.current || player.queue?.tracks?.length > 0) {
+                    return true;
+                }
+            } catch (apErr) {
+                logger.debug('[AUDIO-DIAG] Error attempting autoplay after track skip:', apErr?.message || apErr);
+            }
+        }
+
+        await player.stopPlaying().catch(() => {});
+        if (this.client?.playerController?.showStoppedState) {
+            this.client.playerController.showStoppedState(guildId);
+        }
+        return false;
+    }
+
+    /**
      * Bounded, deduplicated playback recovery engine.
      * Prevents overlapping recovery operations and recursive loops.
      */
@@ -914,14 +955,7 @@ class AudioPlaybackMonitor {
                     ).catch(() => {});
                 }
 
-                if (player.queue?.tracks?.length > 0) {
-                    await player.skip().catch(() => {});
-                } else {
-                    await player.stopPlaying().catch(() => {});
-                    if (this.client?.playerController?.showStoppedState) {
-                        this.client.playerController.showStoppedState(guildId);
-                    }
-                }
+                await this.advanceOrAutoplay(player, track);
 
                 return false;
             }
@@ -1017,14 +1051,7 @@ class AudioPlaybackMonitor {
                         ).catch(() => {});
                     }
 
-                    if (player.queue?.tracks?.length > 0) {
-                        await player.skip().catch(() => {});
-                    } else {
-                        await player.stopPlaying().catch(() => {});
-                        if (this.client?.playerController?.showStoppedState) {
-                            this.client.playerController.showStoppedState(guildId);
-                        }
-                    }
+                    await this.advanceOrAutoplay(player, track);
                     return true;
                 }
 
@@ -1058,14 +1085,7 @@ class AudioPlaybackMonitor {
                             ).catch(() => {});
                         }
 
-                        if (player.queue?.tracks?.length > 0) {
-                            await player.skip().catch(() => {});
-                        } else {
-                            await player.stopPlaying().catch(() => {});
-                            if (this.client?.playerController?.showStoppedState) {
-                                this.client.playerController.showStoppedState(guildId);
-                            }
-                        }
+                        await this.advanceOrAutoplay(player, track);
                         return true;
                     }
                 }

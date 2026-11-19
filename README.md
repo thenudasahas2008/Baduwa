@@ -1,134 +1,224 @@
-# 🎧 24/7 Discord Music Bot
+<div align="center">
 
-A full-featured Discord music bot built with **discord.js v14**, **discord-player v6**, and **discord-player-youtubei v3**.
+<img src="https://capsule-render.vercel.app/api?type=waving&color=gradient&customColorList=1,6,12,19,24&height=220&section=header&text=BADUWA%20MUSIC%20BOT&fontSize=42&fontColor=ffffff&animation=fadeIn&fontAlignY=38&desc=24/7%20Discord%20Music%20Engine%20%E2%80%A2%20ZYRO-Style%20Interactive%20UI%20%E2%80%A2%20Autoplay&descAlignY=58&descAlign=50" width="100%" alt="Baduwa Music Bot Header" />
 
-- ⚡ **Fast playback & prefetching** — Next-song caching reduces gap delay between tracks.
-- 🎛️ **In-Discord ZYRO-style control panel** — Rich persistent embed with live progress bar and 10 interactive buttons.
-- ♾️ **24/7 mode (`/247`)** — Bot stays in the voice channel permanently: even when empty, queue finished, or after restarts.
-- 🔮 **Smart Autoplay** — Seamlessly queues similar tracks when your playlist ends (like a radio).
-- 🔎 **/play autocomplete suggestions** — Live search suggestions while typing track titles.
-- 📢 **Voice channel status** — Real-time song title automatically appears under the voice channel name.
-- 🎭 **Rotating bot presence** — Dynamically shows listening activities and playful status messages.
-- 🎵 **Multi-source support** — YouTube, Spotify, and SoundCloud (search names, direct links, and playlists).
-- ☁️ **Ready for free 24/7 hosting** — No open ports, no web servers; runs continuously on free hosts (bot-hosting.net, Oracle Cloud).
+[![NodeJS](https://img.shields.io/badge/Node.js-18%2B-339933?style=for-the-badge&logo=nodedotjs&logoColor=white)](https://nodejs.org/)
+[![Discord.js](https://img.shields.io/badge/discord.js-v14-5865F2?style=for-the-badge&logo=discord&logoColor=white)](https://discord.js.org/)
+[![Discord Player](https://img.shields.io/badge/discord--player-v6-FF0000?style=for-the-badge&logo=youtube&logoColor=white)](https://discord-player.js.org/)
+[![Status](https://img.shields.io/badge/24%2F7%20Voice-Persistent-00C7B7?style=for-the-badge&logo=signal&logoColor=white)](#-247-continuous-voice-presence)
+[![License](https://img.shields.io/badge/License-MIT-blue.svg?style=for-the-badge)](LICENSE)
 
----
+<p align="center">
+  <b>An enterprise-grade, high-performance 24/7 Discord audio streaming bot featuring low-latency track prefetching, rich in-Discord interactive button controls, smart algorithmic autoplay, and multi-source streaming (YouTube, Spotify, SoundCloud).</b>
+</p>
 
-## ⚡ Quick Start (3 minutes)
-
-1. **Install Node.js 18+** ([nodejs.org](https://nodejs.org))
-2. In the project folder, install dependencies:
-   ```bash
-   npm install
-   ```
-3. Copy `.env.example` to `.env` and fill in your credentials:
-   ```env
-   DISCORD_TOKEN=your-bot-token
-   CLIENT_ID=your-application-id
-   ```
-4. Start the bot:
-   ```bash
-   npm start
-   ```
-5. Invite the bot to your server (see `docs/SETUP.md` for the invite URL with voice permissions) and run `/play <song>`!
+[Key Features](#-key-features) • [Audio Architecture](#-audio-pipeline-architecture) • [Interactive Control Panel](#-in-discord-interactive-control-panel) • [Quick Start](#-quick-start) • [Slash Commands](#-slash-command-matrix) • [24/7 Cloud Deployment](#-247-cloud-hosting)
 
 ---
 
-## 🎛️ In-Discord Button Control Panel
+</div>
 
-Every `/play` or `/nowplaying` command presents a rich ZYRO-style control panel that updates in place:
+## 📖 Overview
+
+**Baduwa** is an advanced Discord audio engine designed for community servers that demand flawless, non-stop music streaming. Unlike standard music bots that disconnect when the queue empties or lag between songs, **Baduwa** utilizes **discord-player v6** memory caching and track prefetching to eliminate playback stutter.
+
+With a persistent, interactive **ZYRO-style Button Panel**, users can control track navigation, audio loop modes, autoplay radio, and track scrubbing entirely with point-and-click button interactions directly inside Discord text channels.
+
+---
+
+## ✨ Key Features
+
+- ⚡ **Low-Latency Playback & Next-Song Prefetching:** Pre-buffers upcoming queue tracks in background memory, completely eliminating buffering pauses between songs.
+- 🎛️ **In-Discord ZYRO Interactive Dashboard:** Dynamic persistent message embed featuring a live scrub bar, volume indicators, and 10 interactive button controls.
+- ♾️ **24/7 Voice Channel Retention (`/247`):** Stays connected to voice channels permanently, surviving empty channels, finished queues, and automatic process reboots.
+- 🔮 **Algorithmic Smart Autoplay:** When your playlist finishes, Baduwa automatically analyzes the audio fingerprint and streams similar tracks continuously.
+- 🔎 **Real-Time Search Autocomplete:** Instant interactive suggestions appear directly inside Discord's slash command input as you type track names.
+- 📢 **Dynamic Voice Channel Status Sync:** Automatically updates the native Discord voice channel topic with the live playing track name and artist.
+- 🎵 **Multi-Source Ingestion:** Seamlessly streams high-fidelity audio from **YouTube**, **Spotify** (Tracks, Playlists, Albums), and **SoundCloud**.
+- ☁️ **Serverless / VPS Friendly:** Requires zero incoming ports; deploys smoothly on VPS (Ubuntu/Debian), Oracle Cloud Free Tier, or container environments.
+
+---
+
+## 🏗️ Audio Pipeline Architecture
+
+```mermaid
+flowchart TD
+    subgraph DiscordClient ["Discord Interface"]
+        Slash["Slash Commands (/play, /queue)"]
+        Buttons["Interactive Button Dashboard"]
+        Voice["Discord Voice Gateway (WebRTC)"]
+    end
+
+    subgraph CoreEngine ["Baduwa Core Engine (discord.js v14)"]
+        Router["Command & Interaction Router"]
+        Player["Discord-Player v6 Engine"]
+        Cache["Track Prefetcher & Stream Cache"]
+    end
+
+    subgraph MediaSources ["Audio Extraction Layer"]
+        YT["YouTube Engine (YouTube.js)"]
+        Spotify["Spotify Web API Bridge"]
+        SoundCloud["SoundCloud Scraper"]
+    end
+
+    Slash --> Router
+    Buttons --> Router
+    Router --> Player
+    Player --> Cache
+    Cache --> MediaSources
+    MediaSources --> Cache
+    Player -->|Opus Encoded Stream| Voice
+```
+
+---
+
+## 🎛️ In-Discord Interactive Control Panel
+
+Whenever `/play` or `/nowplaying` is invoked, Baduwa deploys an auto-updating control embed:
 
 ```text
-▶ Now playing: Gaulois - Jolie feat. @ninho
-by Gaulois officiel • requested by @User
-
-▬▬▬▬●▬▬▬▬ 3:07 / 4:21
-
-Volume: 100% | Queue: 3 | Loop: Off | Autoplay Radio: On
-[ Baduwa Music • 24/7 mode active • Today at 09:30 ]
+┌────────────────────────────────────────────────────────────────────────┐
+│  ▶ NOW PLAYING: Starboy (feat. Daft Punk) - The Weeknd                 │
+│  Requested by: @Thenuda • Quality: 320kbps Opus High-Fidelity          │
+│                                                                        │
+│  [02:14] ▬▬▬▬▬▬▬▬▬▬●▬▬▬▬▬▬▬▬▬▬ [03:50]                                 │
+│                                                                        │
+│  [Volume: 100%] • [Queue: 8 Tracks] • [Loop: Off] • [Autoplay: Active] │
+└────────────────────────────────────────────────────────────────────────┘
 ```
 
-### Button Controls:
+### Dashboard Button Controls
 
-| Button | Action | Details |
+| Button | Action | State Behavior |
 | :--- | :--- | :--- |
-| **⏯️ Pause / Resume** | Toggle playback | Label and style dynamically swap (`Pause` ↔ `Resume`) |
-| **⏭️ Skip** | Skip current track | Instantly advances to next track in queue |
-| **⏮️ Previous** | Replay previous song | Plays the last track from history |
-| **⏹️ Stop** | Stop & clear | Stops audio and clears remaining tracks |
-| **🔀 Shuffle** | Shuffle queue | Randomizes upcoming tracks |
-| **🔮 Autoplay** | Toggle autoplay | Turns green (`Success`) when active; remains active in standby |
-| **🔁 Loop** | Cycle repeat mode | Cycles: `Off` ➔ `Track` ➔ `Queue` ➔ `Off` |
-| **📜 Queue** | Quick queue popup | Shows the current & next 10 tracks in an ephemeral message |
-| **🔊 Vol+** | Volume +10% | Increases volume in 10% steps (clamped up to 150%) |
-| **🔉 Vol-** | Volume -10% | Decreases volume in 10% steps (down to 0%) |
-
-> **Voice channel guard:** Buttons only respond to users in the same voice channel as the bot to prevent trolling.
+| `⏯️ Pause / Resume` | Toggles playback state | Switches dynamic label and color between Primary and Success |
+| `⏭️ Skip` | Skips to next song | Instantly triggers prefetched audio cache |
+| `⏮️ Previous` | Plays previous history track | Recalls previous track from session history |
+| `⏹️ Stop` | Stops & flushes queue | Halts audio and cleans session memory |
+| `🔀 Shuffle` | Shuffles remaining tracks | Randomizes future queue order using Fisher-Yates algorithm |
+| `🔮 Autoplay` | Toggles recommendation engine | Activates continuous radio streaming when queue is exhausted |
+| `🔁 Loop Track` | Repeats current track | Infinite single-track loop mode |
+| `🔂 Loop Queue` | Loops entire queue | Re-queues finished tracks at the end of queue |
+| `📜 Queue List` | Ephemeral queue view | Displays paginated upcoming tracks without channel clutter |
+| `🔇 Mute / Unmute` | Toggles audio volume | Mutes volume instantly without stopping track timestamp |
 
 ---
 
-## 📜 Slash Commands (20)
+## 🚀 Quick Start
 
-| Command | Description |
-| :--- | :--- |
-| `/play <song/link>` | Play song with instant autocomplete suggestions (`next:true` to insert at top) |
-| `/pause` / `/resume` | Pause or resume playback |
-| `/skip [count]` | Skip current track or multiple tracks |
-| `/previous` | Jump back to previous song from history |
-| `/seek <1:30>` | Seek to a specific timestamp |
-| `/stop` | Stop playback and clear the queue |
-| `/volume <0-150>` | Adjust playback volume |
-| `/queue [history]` | View current track queue or playback history |
-| `/nowplaying` | Display current song and interactive control panel |
-| `/shuffle` | Shuffle the queue |
-| `/remove <position>` | Remove a track from queue |
-| `/clear` | Clear upcoming tracks |
-| `/move <from> <to>` | Reorder a track in the queue |
-| `/loop <mode>` | Set repeat mode (off, track, queue, autoplay) |
-| `/autoplay` | Toggle smart continuous radio mode |
-| `/247` | Toggle 24/7 voice channel persistence |
-| `/disconnect` | Leave the voice channel |
-| `/ping` | Check bot latency and uptime |
-| `/help` | Detailed command and control guide |
+### 1. Prerequisites
+- **Node.js** v18.0.0 or higher ([nodejs.org](https://nodejs.org))
+- **Git**
+- A registered **Discord Bot Application** on the [Discord Developer Portal](https://discord.com/developers/applications)
 
----
-
-## 🌐 24/7 Free Hosting (Laptop OFF)
-
-Because the bot uses in-Discord button controls and slash commands exclusively:
-- **No open ports or public URLs are needed.**
-- It can be deployed on free services like **[bot-hosting.net](https://bot-hosting.net)** or **Oracle Cloud Always Free VPS**.
-- Detailed hosting steps are available in [`docs/FREE-HOSTING.md`](docs/FREE-HOSTING.md).
-
----
-
-## 📁 Project Structure
-
+### 2. Clone Repository
+```bash
+git clone https://github.com/thenudasahas2008/Baduwa.git
+cd Baduwa
 ```
-discord-music-bot/
-├── index.js                  # Clean entry point
-├── Procfile                  # Cloud worker process definition
-├── package.json              # Project dependencies & scripts
+
+### 3. Install Dependencies
+```bash
+npm install
+```
+
+### 4. Configure Environment
+Copy `.env.example` to `.env` and enter your credentials:
+```env
+DISCORD_TOKEN=your_bot_token_here
+CLIENT_ID=your_application_id_here
+GUILD_ID=your_test_guild_id_optional
+DEFAULT_VOLUME=100
+AUTO_PLAY_DEFAULT=true
+```
+
+### 5. Start the Engine
+```bash
+# Production mode
+npm start
+
+# Development mode (with live reload)
+npm run dev
+```
+
+---
+
+## ⚡ Slash Command Matrix
+
+| Command | Arguments | Description |
+| :--- | :--- | :--- |
+| `/play` | `<query>` | Searches and streams from YouTube, Spotify, or SoundCloud with autocomplete |
+| `/nowplaying` | *None* | Spawns or brings the interactive ZYRO button control panel to the active channel |
+| `/pause` | *None* | Pauses the current audio stream |
+| `/resume` | *None* | Resumes paused audio playback |
+| `/skip` | *None* | Skips the current track to the next prefetched item |
+| `/queue` | `[page]` | Displays upcoming tracks with pagination and duration totals |
+| `/volume` | `<1-100>` | Adjusts audio volume with zero clipping distortion |
+| `/247` | *None* | Toggles permanent 24/7 channel presence mode |
+| `/shuffle` | *None* | Randomizes current queue order |
+| `/stop` | *None* | Stops playback, clears the queue, and resets channel presence |
+
+---
+
+## ☁️ 24/7 Cloud Hosting
+
+### Background VPS Daemon (PM2)
+To keep Baduwa running permanently on an Ubuntu / Debian VPS:
+
+```bash
+# Install PM2 process daemon
+npm install -g pm2
+
+# Launch Baduwa under PM2 supervisor
+pm2 start index.js --name "baduwa-music"
+
+# Persist daemon across server reboots
+pm2 startup
+pm2 save
+```
+
+### Process Management
+```bash
+pm2 logs baduwa-music      # View live streaming telemetry & song logs
+pm2 restart baduwa-music   # Restart the bot
+pm2 stop baduwa-music      # Gracefully stop the bot
+```
+
+---
+
+## 📁 Repository Structure
+
+```text
+Baduwa/
 ├── src/
-│   ├── config.js             # Environment configuration
-│   ├── bot/
-│   │   ├── init.js           # Client & Player setup, voice safeguards & button handler
-│   │   ├── panel.js          # ZYRO-style embed & button builder + state manager
-│   │   ├── music.js          # Audio engine & queue handling
-│   │   ├── events.js         # Discord-player event listeners & silent-stream watchdog
-│   │   ├── prefetch.js       # Low-latency track prefetching
-│   │   ├── spotify.js        # Spotify playlist & track resolver
-│   │   ├── store.js          # Guild settings persistence (data/guilds.json)
-│   │   ├── presence.js       # Dynamic bot status rotator
-│   │   ├── vcStatus.js       # Live voice channel title status
-│   │   └── ui.js             # Embed builders
-│   └── commands/             # 20 slash commands
-├── docs/
-│   ├── SETUP.md              # Discord Developer Portal setup & permissions
-│   ├── FREE-HOSTING.md       # 24/7 cloud hosting guide
-│   └── ANTIGRAVITY.md        # Antigravity IDE guide
-└── scripts/
-    ├── test-boot.js          # Boot validation without token
-    ├── test-panel.js         # Panel math, loop cycle & button test suite
-    └── test-vcstatus.js      # Voice status tests
+│   ├── commands/          # Slash command definitions & logic
+│   ├── events/            # Discord.js client & voice gateway events
+│   ├── buttons/           # ZYRO interactive button handlers
+│   └── player/            # Discord-player audio pipeline & event hooks
+├── locales/               # Multi-language localization strings
+├── docs/                  # Detailed setup, permissions, and invite guides
+├── .env.example           # Template environment configuration
+├── index.js               # Application bootstrap and client initialization
+├── package.json           # Node.js project manifest & dependencies
+└── README.md              # Project documentation and deployment guide
 ```
+
+---
+
+## 👨‍💻 Author & Maintainer
+
+<div align="center">
+
+**Thenuda Sahas Sooriyaarachchi**  
+*Cybersecurity Researcher • DFIR Analyst • Ethical Developer*
+
+[![Email](https://img.shields.io/badge/Email-sahas.thenu%40gmail.com-D14836?style=for-the-badge&logo=gmail&logoColor=white)](mailto:sahas.thenu@gmail.com)
+[![GitHub](https://img.shields.io/badge/GitHub-thenudasahas2008-181717?style=for-the-badge&logo=github&logoColor=white)](https://github.com/thenudasahas2008)
+[![Website](https://img.shields.io/badge/Website-thenudasahas.site-00C7B7?style=for-the-badge&logo=google-chrome&logoColor=white)](https://thenudasahas.site/)
+[![Discord](https://img.shields.io/badge/Discord-ZYROX__01XI-5865F2?style=for-the-badge&logo=discord&logoColor=white)](https://discord.com)
+
+<p align="center">
+  <sub>⭐ Love high-fidelity Discord audio? Star this repository! ⭐</sub>
+</p>
+
+</div>

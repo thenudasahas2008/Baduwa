@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="https://capsule-render.vercel.app/api?type=waving&color=gradient&customColorList=1,6,12,19,24&height=220&section=header&text=BADUWA%20MUSIC%20BOT&fontSize=42&fontColor=ffffff&animation=fadeIn&fontAlignY=38&desc=24/7%20Discord%20Music%20Engine%20%E2%80%A2%20ZYRO-Style%20Interactive%20UI%20%E2%80%A2%20Autoplay&descAlignY=58&descAlign=50" width="100%" alt="Baduwa Music Bot Header" />
+<img src="assets/header.svg" width="100%" alt="Baduwa Music Bot Header" />
 
 [![NodeJS](https://img.shields.io/badge/Node.js-18%2B-339933?style=for-the-badge&logo=nodedotjs&logoColor=white)](https://nodejs.org/)
 [![Discord.js](https://img.shields.io/badge/discord.js-v14-5865F2?style=for-the-badge&logo=discord&logoColor=white)](https://discord.js.org/)

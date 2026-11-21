@@ -300,6 +300,7 @@ module.exports = {
                     volume: getValidVolume(process.env.DEFAULT_VOLUME, 80),
                     instaUpdateFiltersFix: false,
                     applyVolumeAsFilter: false,
+                    vcRegion: voiceChannel.rtcRegion || undefined,
                     node: activeNode?.id || undefined,
                 });
             } else {

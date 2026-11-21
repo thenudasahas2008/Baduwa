@@ -45,13 +45,18 @@ const NODE_RATE_LIMIT_COOLDOWN_MS = 60 * 1000; // 1 minute for temporary rate li
 
 const PREFERRED_FAST_HOSTS = [
     'lavalink-v4.triniumhost.com',
-    'lavalink.nazha.online',
     'lavalink.jirayu.net',
+    'lavalink.nazha.online',
     'lavalinkv4.serenetia.com',
+    'lavalink.triniumhost.com',
 ];
 
 const BLOCKED_PUBLIC_HOSTS = [
     'lava-v4.millohost.my.id', // HTTP 403 / auth rejection / -29000ms latency clock skew
+    'n3.nexcloud.in',          // Continuous timeout
+    'omega.vexanode.cloud',    // Continuous timeout
+    'lava2.kasawa.pro',        // Continuous timeout
+    '157.254.192.15',          // Continuous timeout
 ];
 
 class PublicNodeProvider {

@@ -286,8 +286,10 @@ function createAndRegisterLavalinkManager(client, initialNodes) {
                 if (guild) guild.shard.send(payload);
             },
             autoSkip: true,
+            autoMove: true,
+            autoSkipOnResolveError: true,
             playerOptions: {
-                clientBasedPositionUpdateInterval: 1000,
+                clientBasedPositionUpdateInterval: 500,
                 minAutoPlayMs: 0,
                 defaultSearchPlatform: process.env.DEFAULT_SEARCH_PLATFORM || "ytmsearch",
                 applyVolumeAsFilter: false,

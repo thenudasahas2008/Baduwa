@@ -2,9 +2,9 @@ const logger = require('./logger');
 const { resolveAlternativeTrack } = require('./searchEngine');
 const { isManualStopActive } = require('./playerLifecycle');
 
-const WATCHDOG_CHECK_INTERVAL_MS = 3000;
-const STALL_THRESHOLD_MS = 18000;
-const INITIAL_GRACE_PERIOD_MS = 15000;
+const WATCHDOG_CHECK_INTERVAL_MS = 2500;
+const STALL_THRESHOLD_MS = 8000;
+const INITIAL_GRACE_PERIOD_MS = 8000;
 const MAX_TRACK_RETRIES = 2;
 
 function formatDuration(ms) {
@@ -1004,15 +1004,14 @@ class AudioPlaybackMonitor {
             // Step 1: In public node mode, migrate to a healthy node if the node is experiencing
             // a stall, disconnection, track execution failure, or repeated source errors.
             let migrated = false;
-            const shouldAttemptNodeMigration = (
+            const shouldAttemptNodeMigration = !options.isSourceError && (
                 options.reason === 'trackError' ||
                 options.reason === 'trackStuck' ||
                 options.reason === 'stalledPosition' ||
                 options.reason === 'recoveryVerificationFailed' ||
                 options.reason === 'consecutive-track-failures' ||
                 options.reason === 'nodeDisconnected' ||
-                !player.node?.connected ||
-                (options.isSourceError && retries >= 1)
+                !player.node?.connected
             );
 
             if (shouldAttemptNodeMigration && this.client?.lavalinkMode === 'public' && this.client?.lavalinkConnectionManager?.migratePlayerToHealthyNode) {

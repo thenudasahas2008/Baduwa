@@ -21,8 +21,9 @@ const MAX_SEEDS = 3;
 const HISTORY_WINDOW = 50;
 const ARTIST_COOLDOWN_WINDOW = 3; // Avoid same artist for next 3 autoplay selections
 
-// Clearly non-music uploads to skip
+// Clearly non-music uploads and compilation/mixtape videos to skip
 const NON_MUSIC = /\b(reaction|trailer|teaser|interview|podcast|review|tutorial|gameplay|highlights?|behind\s+the\s+scenes|full\s+(?:movie|album|concert))\b/i;
+const COMPILATION_OR_SPAM = /\b(top\s+hits|trending\s+songs?|best\s+songs?|top\s+songs?|nonstop|non-stop|compilation|mega\s*mix|mashup\s+mix|jukebox|100\s+songs?|50\s+songs?|full\s+(?:album|mixtape|playlist))\b/i;
 const TOPIC_AUTHOR = /-\s*topic\s*$/i;
 
 class AutoplayHistoryManager {
@@ -210,9 +211,22 @@ function isDuplicate(track, recentIds, history) {
     return false;
 }
 
-function looksLikeNonMusic(track) {
+function looksLikeNonMusic(track, seedTrack = null) {
+    if (!track?.info) return true;
     if (track.info.isStream) return true;
-    return NON_MUSIC.test(track.info.title || '');
+    const title = track.info.title || '';
+    if (NON_MUSIC.test(title)) return true;
+    if (COMPILATION_OR_SPAM.test(title)) return true;
+
+    // Filter out long compilation / mixtape videos (> 11 mins / 660,000ms) when the seed track is normal length (< 10 mins)
+    const duration = Number(track.info.duration || 0);
+    const seedDuration = Number(seedTrack?.info?.duration || 0);
+    const isSeedNormalLength = !seedDuration || seedDuration < 600000;
+    if (isSeedNormalLength && duration > 660000) {
+        return true;
+    }
+
+    return false;
 }
 
 function isSongLike(track) {
@@ -298,18 +312,22 @@ async function fetchComplementaryCandidates(player, lastPlayedTrack) {
         if (title) {
             queries.push({ query: `${title} sinhala songs`, source: 'ytmsearch' });
         }
-        queries.push({ query: 'sinhala trending songs', source: 'ytmsearch' });
-        queries.push({ query: 'sinhala songs playlist', source: 'ytmsearch' });
     }
 
     if (context.genre) {
-        if (context.scene && context.scene !== 'sinhala') {
+        if (author && !isGenericArtist(author)) {
+            queries.push({ query: `${author} ${context.genre}`, source: 'ytmsearch' });
+        } else if (context.scene && context.scene !== 'sinhala') {
             queries.push({ query: `${context.scene} ${context.genre} songs`, source: 'ytmsearch' });
         } else {
-            queries.push({ query: `${context.genre} songs playlist`, source: 'ytmsearch' });
+            queries.push({ query: `${context.genre} songs`, source: 'ytmsearch' });
         }
     } else if (context.mood) {
-        queries.push({ query: `${context.mood} songs playlist`, source: 'ytmsearch' });
+        if (author && !isGenericArtist(author)) {
+            queries.push({ query: `${author} ${context.mood}`, source: 'ytmsearch' });
+        } else {
+            queries.push({ query: `${context.mood} songs`, source: 'ytmsearch' });
+        }
     }
 
     const searchPromises = queries.map(async (q) => {
@@ -528,7 +546,7 @@ async function findAutoplayTracks(player, lastPlayedTrack) {
 
         if (isDuplicate(track, seen, dedupHistory)) continue;
 
-        if (looksLikeNonMusic(track)) {
+        if (looksLikeNonMusic(track, lastPlayedTrack)) {
             nonMusic.push(track);
             continue;
         }
@@ -820,33 +838,43 @@ async function handleAutoplay(client, player, reason = 'unknown', seedTrack = nu
         if (eligibleTracks.length === 0) {
             const queryArtist = cleanAuthor(seed?.userData?.spotifyArtist || seed?.info?.author || '');
             const queryTitle = cleanTitle(seed?.userData?.spotifyTitle || seed?.info?.title || '');
-            const fallbackQuery = queryArtist && !isGenericArtist(queryArtist)
-                ? `${queryArtist} songs`
-                : (queryTitle ? `${queryTitle} song` : 'top hits songs');
+            let fallbackQuery = '';
+            if (queryArtist && !isGenericArtist(queryArtist)) {
+                fallbackQuery = queryTitle ? `${queryArtist} ${queryTitle}` : `${queryArtist} songs`;
+            } else if (queryTitle) {
+                fallbackQuery = `${queryTitle} song`;
+            }
 
-            logger.info(`[AUTOPLAY] Candidates exhausted; running emergency fallback search for guild ${guildId}: "${fallbackQuery}"`);
-            const fallbackRes = await performSearch(fallbackQuery);
-            if (fallbackRes?.tracks?.length > 0) {
-                eligibleTracks = fallbackRes.tracks.filter(t => {
-                    if (!t?.info?.identifier) return false;
-                    if (currentId && t.info.identifier === currentId) return false;
-                    if (upcomingIds.has(t.info.identifier)) return false;
-                    return true;
-                });
+            if (fallbackQuery) {
+                logger.info(`[AUTOPLAY] Candidates exhausted; running emergency fallback search for guild ${guildId}: "${fallbackQuery}"`);
+                const fallbackRes = await performSearch(fallbackQuery);
+                if (fallbackRes?.tracks?.length > 0) {
+                    eligibleTracks = fallbackRes.tracks.filter(t => {
+                        if (!t?.info?.identifier) return false;
+                        if (currentId && t.info.identifier === currentId) return false;
+                        if (upcomingIds.has(t.info.identifier)) return false;
+                        if (looksLikeNonMusic(t, seed)) return false;
+                        return true;
+                    });
+                }
             }
         }
 
-        // Universal emergency fallback: if specific artist/song search yielded 0, query popular music
-        if (eligibleTracks.length === 0) {
-            logger.info(`[AUTOPLAY] Candidates exhausted; running universal fallback search for guild ${guildId}`);
-            const universalRes = await performSearch('sinhala songs hits');
-            if (universalRes?.tracks?.length > 0) {
-                eligibleTracks = universalRes.tracks.filter(t => {
-                    if (!t?.info?.identifier) return false;
-                    if (currentId && t.info.identifier === currentId) return false;
-                    if (upcomingIds.has(t.info.identifier)) return false;
-                    return true;
-                });
+        // Author fallback: if specific artist/song search yielded 0, query artist music
+        if (eligibleTracks.length === 0 && seed?.info?.author) {
+            const author = cleanAuthor(seed.info.author);
+            if (author && !isGenericArtist(author)) {
+                logger.info(`[AUTOPLAY] Running author fallback search for guild ${guildId}: "${author} songs"`);
+                const authorRes = await performSearch(`${author} songs`);
+                if (authorRes?.tracks?.length > 0) {
+                    eligibleTracks = authorRes.tracks.filter(t => {
+                        if (!t?.info?.identifier) return false;
+                        if (currentId && t.info.identifier === currentId) return false;
+                        if (upcomingIds.has(t.info.identifier)) return false;
+                        if (looksLikeNonMusic(t, seed)) return false;
+                        return true;
+                    });
+                }
             }
         }
 

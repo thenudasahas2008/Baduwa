@@ -26,7 +26,7 @@ function formatUptime(ms) {
 module.exports = {
     data: new SlashCommandBuilder()
         .setName('about')
-        .setDescription('Displays detailed information about Baduwa (ZYRO) Music.'),
+        .setDescription('Displays detailed information about Baduwa Music.'),
     async execute(interaction) {
         const { client } = interaction;
 
@@ -34,7 +34,7 @@ module.exports = {
 
         const embed = new EmbedBuilder()
             .setColor(COLORS.PRIMARY)
-            .setTitle('⚡ About Baduwa (ZYRO) Music')
+            .setTitle('⚡ About Baduwa Music')
             .setDescription(
                 '**Baduwa** is a premium, high-fidelity Discord music bot engineered for crystal-clear audio, seamless queue automation, and uninterrupted 24/7 playback.'
             );

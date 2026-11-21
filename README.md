@@ -12,7 +12,7 @@
   <b>An enterprise-grade, high-performance 24/7 Discord audio streaming bot featuring low-latency track prefetching, rich in-Discord interactive button controls, smart algorithmic autoplay, and multi-source streaming (YouTube, Spotify, SoundCloud).</b>
 </p>
 
-[Key Features](#-key-features) • [Audio Architecture](#-audio-pipeline-architecture) • [Interactive Control Panel](#-in-discord-interactive-control-panel) • [Quick Start](#-quick-start) • [Slash Commands](#-slash-command-matrix) • [24/7 Cloud Deployment](#-247-cloud-hosting)
+[Key Features](#-key-features) • [Interactive Control Panel](#-in-discord-interactive-control-panel) • [Quick Start](#-quick-start) • [Slash Commands](#-slash-command-matrix) • [24/7 Cloud Deployment](#-247-cloud-hosting)
 
 ---
 
@@ -22,14 +22,14 @@
 
 **Baduwa** is an advanced Discord audio engine designed for community servers that demand flawless, non-stop music streaming. Unlike standard music bots that disconnect when the queue empties or lag between songs, **Baduwa** utilizes **discord-player v6** memory caching and track prefetching to eliminate playback stutter.
 
-With a persistent, interactive **ZYRO-style Button Panel**, users can control track navigation, audio loop modes, autoplay radio, and track scrubbing entirely with point-and-click button interactions directly inside Discord text channels.
+With a persistent, interactive **Button Control Panel**, users can control track navigation, audio loop modes, autoplay radio, and track scrubbing entirely with point-and-click button interactions directly inside Discord text channels.
 
 ---
 
 ## ✨ Key Features
 
 - ⚡ **Low-Latency Playback & Next-Song Prefetching:** Pre-buffers upcoming queue tracks in background memory, completely eliminating buffering pauses between songs.
-- 🎛️ **In-Discord ZYRO Interactive Dashboard:** Dynamic persistent message embed featuring a live scrub bar, volume indicators, and 10 interactive button controls.
+- 🎛️ **In-Discord Interactive Dashboard:** Dynamic persistent message embed featuring a live scrub bar, volume indicators, and 10 interactive button controls.
 - ♾️ **24/7 Voice Channel Retention (`/247`):** Stays connected to voice channels permanently, surviving empty channels, finished queues, and automatic process reboots.
 - 🔮 **Algorithmic Smart Autoplay:** When your playlist finishes, Baduwa automatically analyzes the audio fingerprint and streams similar tracks continuously.
 - 🔎 **Real-Time Search Autocomplete:** Instant interactive suggestions appear directly inside Discord's slash command input as you type track names.
@@ -39,38 +39,6 @@ With a persistent, interactive **ZYRO-style Button Panel**, users can control tr
 
 ---
 
-## 🏗️ Audio Pipeline Architecture
-
-```mermaid
-flowchart TD
-    subgraph DiscordClient ["Discord Interface"]
-        Slash["Slash Commands (/play, /queue)"]
-        Buttons["Interactive Button Dashboard"]
-        Voice["Discord Voice Gateway (WebRTC)"]
-    end
-
-    subgraph CoreEngine ["Baduwa Core Engine (discord.js v14)"]
-        Router["Command & Interaction Router"]
-        Player["Discord-Player v6 Engine"]
-        Cache["Track Prefetcher & Stream Cache"]
-    end
-
-    subgraph MediaSources ["Audio Extraction Layer"]
-        YT["YouTube Engine (YouTube.js)"]
-        Spotify["Spotify Web API Bridge"]
-        SoundCloud["SoundCloud Scraper"]
-    end
-
-    Slash --> Router
-    Buttons --> Router
-    Router --> Player
-    Player --> Cache
-    Cache --> MediaSources
-    MediaSources --> Cache
-    Player -->|Opus Encoded Stream| Voice
-```
-
----
 
 ## 🎛️ In-Discord Interactive Control Panel
 
@@ -148,7 +116,7 @@ npm run dev
 | Command | Arguments | Description |
 | :--- | :--- | :--- |
 | `/play` | `<query>` | Searches and streams from YouTube, Spotify, or SoundCloud with autocomplete |
-| `/nowplaying` | *None* | Spawns or brings the interactive ZYRO button control panel to the active channel |
+| `/nowplaying` | *None* | Spawns or brings the interactive button control panel to the active channel |
 | `/pause` | *None* | Pauses the current audio stream |
 | `/resume` | *None* | Resumes paused audio playback |
 | `/skip` | *None* | Skips the current track to the next prefetched item |
@@ -193,7 +161,7 @@ Baduwa/
 ├── src/
 │   ├── commands/          # Slash command definitions & logic
 │   ├── events/            # Discord.js client & voice gateway events
-│   ├── buttons/           # ZYRO interactive button handlers
+│   ├── buttons/           # Interactive button handlers
 │   └── player/            # Discord-player audio pipeline & event hooks
 ├── locales/               # Multi-language localization strings
 ├── docs/                  # Detailed setup, permissions, and invite guides
@@ -202,23 +170,3 @@ Baduwa/
 ├── package.json           # Node.js project manifest & dependencies
 └── README.md              # Project documentation and deployment guide
 ```
-
----
-
-## 👨‍💻 Author & Maintainer
-
-<div align="center">
-
-**Thenuda Sahas Sooriyaarachchi**  
-*Cybersecurity Researcher • DFIR Analyst • Ethical Developer*
-
-[![Email](https://img.shields.io/badge/Email-sahas.thenu%40gmail.com-D14836?style=for-the-badge&logo=gmail&logoColor=white)](mailto:sahas.thenu@gmail.com)
-[![GitHub](https://img.shields.io/badge/GitHub-thenudasahas2008-181717?style=for-the-badge&logo=github&logoColor=white)](https://github.com/thenudasahas2008)
-[![Website](https://img.shields.io/badge/Website-thenudasahas.site-00C7B7?style=for-the-badge&logo=google-chrome&logoColor=white)](https://thenudasahas.site/)
-[![Discord](https://img.shields.io/badge/Discord-ZYROX__01XI-5865F2?style=for-the-badge&logo=discord&logoColor=white)](https://discord.com)
-
-<p align="center">
-  <sub>⭐ Love high-fidelity Discord audio? Star this repository! ⭐</sub>
-</p>
-
-</div>

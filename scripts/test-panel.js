@@ -1,4 +1,4 @@
-// Test suite for ZYRO-style now-playing panel:
+// Test suite for now-playing panel:
 // Asserts progress-bar math (50% marker centered with clean line '─' and marker '🔵'),
 // button counts (<= 5 per row, 4 rows total),
 // label toggles (Pause<->Resume), loop cycle (Off->Track->Queue->Off),

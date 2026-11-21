@@ -291,22 +291,7 @@ class TwentyFourSevenManager {
                     }
                 } else {
                     player.playing = false;
-                    const isAutoplay = Boolean(
-                        client.autoplayEnabled?.get?.(guildId) ||
-                        client.guildSettings?.isAutoplay?.(guildId)
-                    );
-                    if (isAutoplay && !player.queue.current && !player.playing && (player.queue?.tracks?.length || 0) === 0) {
-                        const { handleAutoplay } = require('./autoplay');
-                        handleAutoplay(client, player, '247_auto_resume', null).then((started) => {
-                            if (!started) {
-                                client.playerController?.showStoppedState?.(guildId).catch(() => {});
-                            }
-                        }).catch(() => {
-                            client.playerController?.showStoppedState?.(guildId).catch(() => {});
-                        });
-                    } else {
-                        client.playerController?.showStoppedState?.(guildId).catch(() => {});
-                    }
+                    client.playerController?.showStoppedState?.(guildId).catch(() => {});
                 }
 
                 client.voiceChannelStatusManager?.syncGuildPlayerStatus?.(guildId).catch(() => {});

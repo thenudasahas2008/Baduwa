@@ -122,8 +122,36 @@ module.exports = {
 
                 const is247 = Boolean(client.is247Enabled?.(guildId));
 
-                // Case B: If 24/7 is enabled, this disconnect was unintentional (since /leave disables 24/7 first)
+                // If 24/7 is enabled, check if the bot was deliberately disconnected by a server member / moderator
                 if (is247) {
+                    let isManualUserDisconnect = false;
+                    try {
+                        if (typeof oldState.guild?.fetchAuditLogs === 'function') {
+                            const auditLogs = await oldState.guild.fetchAuditLogs({
+                                limit: 1,
+                                type: 27 // AuditLogEvent.MemberDisconnect
+                            }).catch(() => null);
+                            const entry = auditLogs?.entries?.first();
+                            if (entry && entry.target?.id === botId && (Date.now() - entry.createdTimestamp < 4000)) {
+                                isManualUserDisconnect = true;
+                                logger.info(`[247-LIFECYCLE] Bot was disconnected from voice by ${entry.executor?.tag || entry.executorId || 'user'}. Disabling 24/7 mode and canceling auto-recovery.`);
+                            }
+                        }
+                    } catch (_) {}
+
+                    if (isManualUserDisconnect) {
+                        client.set247?.(guildId, false);
+                        client.guildSettings?.set247?.(guildId, false);
+                        twentyFourSevenManager.cancelRecovery(guildId, 'manual_user_disconnect');
+                        const player = client.lavalink?.getPlayer(guildId);
+                        if (player) player.destroy();
+                        client.playerController?.deletePlayer(guildId);
+                        searchSessions.cleanupGuildSessions(guildId);
+                        client.activePlayers?.delete(guildId);
+                        client.updatePresence?.();
+                        return;
+                    }
+
                     twentyFourSevenManager.scheduleAutoRecovery(client, guildId, oldState.channelId, 'voice_disconnect');
 
                     // Invalidate active playing state since voice connection dropped

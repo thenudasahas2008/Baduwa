@@ -902,16 +902,6 @@ class LavalinkConnectionManager {
                         await player.connect();
                         logger.info(`Recovered 24/7 player in guild ${guild.name || guildId} (#${voiceChannel.name || settings.voiceChannelId})`);
                     }
-
-                    // If autoplay is enabled and player is idle with empty queue, seamlessly start autoplay
-                    const isAutoplay = Boolean(
-                        this.client.autoplayEnabled?.get?.(guildId) ||
-                        this.client.guildSettings?.isAutoplay?.(guildId)
-                    );
-                    if (isAutoplay && !player.queue?.current && !player.playing && (player.queue?.tracks?.length || 0) === 0) {
-                        const { handleAutoplay } = require('./autoplay');
-                        handleAutoplay(this.client, player, 'recovery_connect', null).catch(() => {});
-                    }
                 } catch (error) {
                     logger.debug(`Failed to recover 24/7 connection for guild ${guildId}:`, error?.message || error);
                 }

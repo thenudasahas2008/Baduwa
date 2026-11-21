@@ -66,9 +66,8 @@ module.exports = {
 
         // If 24/7 is enabled, explicitly cancel recovery and turn it off
         twentyFourSevenManager.cancelRecovery(guildId, 'command_leave');
-        if (typeof client.is247Enabled === 'function' && client.is247Enabled(guildId)) {
-            client.set247?.(guildId, false);
-        }
+        client.set247?.(guildId, false);
+        client.guildSettings?.set247?.(guildId, false);
 
         // Clear timers
         clearGuildLifecycleTimers(guildId);

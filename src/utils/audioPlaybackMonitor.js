@@ -553,12 +553,12 @@ class AudioPlaybackMonitor {
 
         const guild = this.client?.guilds?.cache?.get(guildId);
         const meVoice = guild?.members?.me?.voice;
-        const channelId = meVoice?.channelId || player.voiceChannelId || player.options?.voiceChannelId;
 
-        // If bot is not in a Discord voice channel, cannot heal gateway socket
-        if (!channelId) {
+        // If bot is not in a Discord voice channel, it was disconnected/left: NEVER force-reconnect
+        if (!meVoice?.channelId) {
             return false;
         }
+        const channelId = meVoice.channelId;
 
         this.logDiagnostic('VOICE_GATEWAY_HEALING', {
             guildId,

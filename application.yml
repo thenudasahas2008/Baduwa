@@ -60,11 +60,11 @@ lavalink:
       vimeo: true
       http: false
       local: false
-    bufferDurationMs: 200
-    frameBufferDurationMs: 1000
+    bufferDurationMs: 1000
+    frameBufferDurationMs: 5000
     youtubePlaylistLoadLimit: 3
     playerUpdateInterval: 2
-    trackStuckThresholdMs: 5000
+    trackStuckThresholdMs: 12000
     useSeekGhosting: true
     ratelimit:
       ipBlocks: []

@@ -44,9 +44,10 @@ const NODE_AUTH_COOLDOWN_MS = 15 * 60 * 1000; // 15 minutes for auth failure
 const NODE_RATE_LIMIT_COOLDOWN_MS = 60 * 1000; // 1 minute for temporary rate limits
 
 const PREFERRED_FAST_HOSTS = [
+    'lavalink-v4.triniumhost.com',
+    'lavalink.nazha.online',
     'lavalink.jirayu.net',
     'lavalinkv4.serenetia.com',
-    'lavalink.nazha.online',
 ];
 
 const BLOCKED_PUBLIC_HOSTS = [

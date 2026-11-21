@@ -364,9 +364,8 @@ class TwentyFourSevenManager {
                     const isPlayerConnected = Boolean(player && player.connected && player.node?.connected);
 
                     if (!isVoiceConnected) {
-                        logger.info(`[247-WATCHDOG] Bot disconnected from 24/7 channel #${voiceChannelId} in guild ${guild.name || guildId}. Auto-rejoining...`);
-                        this.sessions.delete(guildId);
-                        this.scheduleAutoRecovery(client, guildId, voiceChannelId, 'watchdog_disconnect_detected');
+                        // Bot is not in voice: do not force re-join; respect disconnect
+                        continue;
                     } else if (!player) {
                         // Bot is in voice channel, but Lavalink player was destroyed or missing: recreate player
                         const mainNode = client.lavalinkConnectionManager?.getActiveNode?.()

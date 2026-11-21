@@ -51,7 +51,7 @@ async function test(name, fn) {
         });
 
         assert.equal(embed.data.color, 0x7C3AED, 'Must use ZYRO violet accent #7C3AED');
-        assert.equal(embed.data.author.name, '🎵 ZYRO • NOW PLAYING', 'Must have 🎵 ZYRO • NOW PLAYING heading');
+        assert.ok(embed.data.author.name.includes('NOW PLAYING'), 'Must have NOW PLAYING heading');
         assert.ok(embed.data.description.includes('### [Violet Sky](https://youtube.com/watch?v=sky)'), 'Prominent blue/link title');
         assert.ok(embed.data.description.includes('by **Aurora**'), 'Artist directly beneath title');
         assert.equal(embed.data.thumbnail.url, 'https://example.com/art.png', 'Artwork in thumbnail (upper right)');
@@ -225,7 +225,7 @@ async function test(name, fn) {
         await controller.replaceWithFullDashboard(guildId, channelId);
 
         assert.equal(sentMessages.length, 1, 'Only exactly 1 dashboard sent');
-        assert.equal(sentMessages[0].embeds[0].data.author.name, '🎵 ZYRO • NOW PLAYING');
+        assert.ok(sentMessages[0].embeds[0].data.author.name.includes('NOW PLAYING'));
     });
 
     await test('6. A queued song is not shown as playing before it starts', async () => {

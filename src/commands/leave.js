@@ -115,6 +115,7 @@ module.exports = {
         // Clean up client state
         client.activePlayers?.delete(guildId);
         client.autoplayEnabled?.delete(guildId);
+        client.guildSettings?.setAutoplay(guildId, false);
         client.updatePresence?.();
 
         const leaveEmbed = createActionEmbed(

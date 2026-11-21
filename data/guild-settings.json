@@ -48,17 +48,17 @@
     "voiceChannelId": "vc-1",
     "textChannelId": "tc-commands"
   },
-  "guild-regression-dashboard": {
-    "dashboardMessageId": "msg-dash-3",
-    "dashboardChannelId": "tc-full-dashboard",
-    "textChannelId": "tc-full-dashboard",
-    "autoplay": true
-  },
   "guild-test-autoplay-default": {
     "autoplay": true
   },
   "1311229995787747339": {
     "twentyFourSeven": true,
+    "autoplay": false
+  },
+  "guild-regression-dashboard": {
+    "dashboardMessageId": "msg-dash-3",
+    "dashboardChannelId": "tc-full-dashboard",
+    "textChannelId": "tc-full-dashboard",
     "autoplay": true
   }
 }

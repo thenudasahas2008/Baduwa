@@ -93,9 +93,13 @@ class PlayerController {
 
     /**
      * Resolves the target channel for player dashboard messages.
-     * When ZYRO is connected to a voice channel, the destination MUST BE the chat panel
-     * of the connected voice channel. Never falls back to a normal text channel when connected.
-     * When not connected to voice, preserves idle/configured channel behavior.
+     * Supports both dedicated text channels (e.g. #bot-commands, #general) and connected voice channel chat panels.
+     * Precedence:
+     * 1. If options.channelId is explicitly provided and different from the connected voice channel,
+     *    use the commanded text channel so users can control Baduwa from any text channel.
+     * 2. When connected to voice and no distinct text channel is commanded, use the connected voice channel.
+     *    If the voice channel lacks permissions, fall back to activePlayer.textChannelId or accessible channels.
+     * 3. When idle / not connected to voice, resolve configured text channel or idle candidate channels.
      */
     async resolvePlayerChannel(guildId, options = {}, player = null) {
         const activePlayer = player || (this.client.lavalink?.getPlayer ? this.client.lavalink.getPlayer(guildId) : null);
@@ -103,97 +107,13 @@ class PlayerController {
             || (this.client.guilds?.fetch ? await this.client.guilds.fetch(guildId).catch(() => null) : null);
 
         const currentDashboard = this.getDashboard(guildId);
+        const excludedId = options.excludeChannelId || null;
 
-        // 1. Resolve connected voice channel
         const connectedVoiceChannelId = activePlayer?.voiceChannelId
             || guild?.members?.me?.voice?.channelId;
 
-        const excludedId = options.excludeChannelId || null;
-
-        if (connectedVoiceChannelId && connectedVoiceChannelId !== excludedId) {
-            try {
-                let voiceChannel = this.client.channels?.cache?.get(connectedVoiceChannelId)
-                    || guild?.channels?.cache?.get(connectedVoiceChannelId);
-
-                if (!voiceChannel && this.client.channels?.fetch) {
-                    voiceChannel = await this.client.channels.fetch(connectedVoiceChannelId).catch((fetchErr) => {
-                        if (fetchErr.code === 10003) {
-                            logger.warn(`[DASHBOARD-DIAG] Connected voice channel ${connectedVoiceChannelId} for guild ${guildId} returned Unknown Channel (code 10003). Invalidating stale voice channel reference.`);
-                            this.client?.guildSettings?.invalidateVoiceChannel?.(guildId);
-                            return null;
-                        }
-                        if (fetchErr.code === 50013 || fetchErr.code === 50001 || fetchErr.status === 403) {
-                            logger.warn(`[DASHBOARD-DIAG] Missing permissions to fetch connected voice channel ${connectedVoiceChannelId} for guild ${guildId}: ${fetchErr.message}`);
-                            return null;
-                        }
-                        logger.debug(`Failed to fetch connected voice channel ${connectedVoiceChannelId} in guild ${guildId}:`, fetchErr?.message || fetchErr);
-                        return null;
-                    });
-                }
-
-                if (voiceChannel) {
-                    const permResult = this.checkChannelPermissions(voiceChannel, options);
-                    if (permResult.ok) {
-                        return voiceChannel;
-                    }
-                    logger.warn(`[DASHBOARD-DIAG] Connected voice channel ${connectedVoiceChannelId} (${voiceChannel.name || 'voice'}) failed validation: ${permResult.reason}. Falling back to command channel for dashboard visibility.`);
-                }
-
-                // If voiceChannel was not found in Discord or lacked permissions, check fallback candidates strictly excluding the failing channel
-                const fallbackCandidates = [
-                    options.channelId !== connectedVoiceChannelId ? options.channelId : null,
-                    activePlayer?.textChannelId !== connectedVoiceChannelId ? activePlayer?.textChannelId : null,
-                    this.client?.guildSettings?.get?.(guildId)?.textChannelId,
-                    currentDashboard?.channelId !== connectedVoiceChannelId ? currentDashboard?.channelId : null,
-                ].filter(id => id && id !== excludedId);
-
-                for (const fallbackId of [...new Set(fallbackCandidates)]) {
-                    const fallbackChannel = this.client.channels?.cache?.get(fallbackId)
-                        || guild?.channels?.cache?.get(fallbackId)
-                        || (this.client.channels?.fetch ? await this.client.channels.fetch(fallbackId).catch(() => null) : null);
-                    if (fallbackChannel && this.checkChannelPermissions(fallbackChannel, options).ok) {
-                        return fallbackChannel;
-                    }
-                }
-
-                // Guild-level fallback: system channel or first accessible text channel in cache
-                if (guild) {
-                    if (guild.systemChannel && guild.systemChannel.id !== connectedVoiceChannelId && guild.systemChannel.id !== excludedId) {
-                        if (this.checkChannelPermissions(guild.systemChannel, options).ok) {
-                            logger.info(`[DASHBOARD-DIAG] Falling back to systemChannel #${guild.systemChannel.name} for guild ${guildId}`);
-                            return guild.systemChannel;
-                        }
-                    }
-
-                    if (guild.channels?.cache?.size > 0) {
-                        for (const ch of guild.channels.cache.values()) {
-                            if (ch.id === connectedVoiceChannelId || ch.id === excludedId) continue;
-                            const isText = typeof ch.isTextBased === 'function' ? ch.isTextBased() : (ch.type === 0 || ch.type === 2);
-                            if (isText && this.checkChannelPermissions(ch, options).ok) {
-                                logger.info(`[DASHBOARD-DIAG] Falling back to accessible channel #${ch.name} (${ch.id}) for guild ${guildId}`);
-                                return ch;
-                            }
-                        }
-                    }
-                }
-
-                logger.warn(`[DASHBOARD-DIAG] Connected voice channel ${connectedVoiceChannelId} not usable in guild ${guildId} and no valid fallback channel found.`);
-                return null;
-            } catch (err) {
-                logger.warn(`[DASHBOARD-DIAG] Error resolving connected voice channel ${connectedVoiceChannelId} for guild ${guildId}:`, err?.message || err);
-                return null;
-            }
-        }
-
-        // 2. When the bot is not connected to voice, follow existing safe idle behavior and do not invent a voice channel target.
-        const candidates = [
-            this.client?.guildSettings?.get?.(guildId)?.textChannelId,
-            options.channelId,
-            activePlayer?.textChannelId,
-            currentDashboard?.channelId,
-        ].filter(Boolean);
-
-        for (const channelId of [...new Set(candidates)]) {
+        const resolveChannelCandidate = async (channelId, isVoice = false) => {
+            if (!channelId || channelId === excludedId) return null;
             try {
                 let channel = this.client.channels?.cache?.get(channelId)
                     || guild?.channels?.cache?.get(channelId);
@@ -201,7 +121,7 @@ class PlayerController {
                 if (!channel && this.client.channels?.fetch) {
                     channel = await this.client.channels.fetch(channelId).catch((fetchErr) => {
                         if (fetchErr.code === 10003) {
-                            logger.warn(`[DASHBOARD-DIAG] Idle channel candidate ${channelId} for guild ${guildId} returned Unknown Channel (code 10003). Invalidating stale channel reference.`);
+                            logger.warn(`[DASHBOARD-DIAG] Channel candidate ${channelId} for guild ${guildId} returned Unknown Channel (code 10003). Invalidating stale channel reference.`);
                             if (this.client?.guildSettings?.get?.(guildId)?.textChannelId === channelId) {
                                 this.client?.guildSettings?.invalidateTextChannel?.(guildId);
                             }
@@ -211,11 +131,16 @@ class PlayerController {
                             if (activePlayer?.textChannelId === channelId) {
                                 activePlayer.textChannelId = null;
                             }
-                            if (this.client?.guildSettings?.get?.(guildId)?.voiceChannelId === channelId) {
+                            if (connectedVoiceChannelId === channelId || this.client?.guildSettings?.get?.(guildId)?.voiceChannelId === channelId) {
                                 this.client?.guildSettings?.invalidateVoiceChannel?.(guildId);
                             }
                             return null;
                         }
+                        if (fetchErr.code === 50013 || fetchErr.code === 50001 || fetchErr.status === 403) {
+                            logger.warn(`[DASHBOARD-DIAG] Missing permissions to fetch channel ${channelId} for guild ${guildId}: ${fetchErr.message}`);
+                            return null;
+                        }
+                        logger.debug(`Failed to fetch channel ${channelId} in guild ${guildId}:`, fetchErr?.message || fetchErr);
                         return null;
                     });
                 }
@@ -225,36 +150,105 @@ class PlayerController {
                     if (permResult.ok) {
                         return channel;
                     }
+                    logger.warn(`[DASHBOARD-DIAG] Channel ${channelId} (${channel.name || 'channel'}) failed validation: ${permResult.reason}.`);
                 }
             } catch (err) {
-                logger.debug(`Failed to resolve idle channel ${channelId}:`, err?.message || err);
+                logger.warn(`[DASHBOARD-DIAG] Error resolving channel ${channelId} for guild ${guildId}:`, err?.message || err);
+            }
+            return null;
+        };
+
+        // 1. Explicit command / interaction channel outside the voice channel (e.g. #bot-commands, #general)
+        if (connectedVoiceChannelId && options.channelId && options.channelId !== connectedVoiceChannelId && options.channelId !== excludedId) {
+            const commandChannel = await resolveChannelCandidate(options.channelId);
+            if (commandChannel) {
+                return commandChannel;
             }
         }
 
-        // Fallback for idle mode: if candidates failed, check systemChannel or accessible text channel in guild
-        try {
-            const guild = this.client.guilds?.cache?.get(guildId)
-                || (this.client.guilds?.fetch ? await this.client.guilds.fetch(guildId).catch(() => null) : null);
-            if (guild) {
-                if (guild.systemChannel) {
-                    const permResult = this.checkChannelPermissions(guild.systemChannel, options);
-                    if (permResult.ok) {
+        // 2. When connected to voice
+        if (connectedVoiceChannelId && connectedVoiceChannelId !== excludedId) {
+            const voiceChannel = await resolveChannelCandidate(connectedVoiceChannelId, true);
+            if (voiceChannel) {
+                return voiceChannel;
+            }
+
+            // If voiceChannel lacked permissions or was unavailable, check fallback candidates strictly excluding the failing channel
+            // Only fall back to text channels if a command text channel or active player text channel exists
+            const fallbackCandidates = [
+                options.channelId !== connectedVoiceChannelId ? options.channelId : null,
+                activePlayer?.textChannelId !== connectedVoiceChannelId ? activePlayer?.textChannelId : null,
+            ].filter(id => id && id !== excludedId);
+
+            for (const fallbackId of [...new Set(fallbackCandidates)]) {
+                const fallbackChannel = await resolveChannelCandidate(fallbackId);
+                if (fallbackChannel) {
+                    return fallbackChannel;
+                }
+            }
+
+            // Only check guild-level fallback if an explicit channel was requested in options
+            if (options.channelId && guild) {
+                if (guild.systemChannel && guild.systemChannel.id !== connectedVoiceChannelId && guild.systemChannel.id !== excludedId) {
+                    if (this.checkChannelPermissions(guild.systemChannel, options).ok) {
+                        logger.info(`[DASHBOARD-DIAG] Falling back to systemChannel #${guild.systemChannel.name} for guild ${guildId}`);
+                        return guild.systemChannel;
+                    }
+                }
+
+                if (guild.channels?.cache?.size > 0) {
+                    for (const ch of guild.channels.cache.values()) {
+                        if (ch.id === connectedVoiceChannelId || ch.id === excludedId) continue;
+                        const isText = typeof ch.isTextBased === 'function' ? ch.isTextBased() : (ch.type === 0 || ch.type === 2);
+                        if (isText && this.checkChannelPermissions(ch, options).ok) {
+                            logger.info(`[DASHBOARD-DIAG] Falling back to accessible channel #${ch.name} (${ch.id}) for guild ${guildId}`);
+                            return ch;
+                        }
+                    }
+                }
+            }
+
+            logger.warn(`[DASHBOARD-DIAG] Connected voice channel ${connectedVoiceChannelId} not usable in guild ${guildId} and no valid fallback channel found.`);
+            return null;
+        }
+
+        // 3. When the bot is not connected to voice (idle mode)
+        const idleCandidates = [
+            this.client?.guildSettings?.get?.(guildId)?.textChannelId,
+            options.channelId,
+            activePlayer?.textChannelId,
+            currentDashboard?.channelId,
+        ].filter(id => id && id !== excludedId);
+
+        for (const channelId of [...new Set(idleCandidates)]) {
+            const channel = await resolveChannelCandidate(channelId);
+            if (channel) {
+                return channel;
+            }
+        }
+
+        // Fallback for idle mode: systemChannel or first accessible text channel in guild
+        if (guild) {
+            try {
+                if (guild.systemChannel && guild.systemChannel.id !== excludedId) {
+                    if (this.checkChannelPermissions(guild.systemChannel, options).ok) {
                         return guild.systemChannel;
                     }
                 }
                 const channels = guild.channels?.cache ? Array.from(guild.channels.cache.values()) : [];
                 for (const ch of channels) {
-                    const permResult = this.checkChannelPermissions(ch, options);
-                    if (permResult.ok) {
+                    if (ch.id === excludedId) continue;
+                    const isText = typeof ch.isTextBased === 'function' ? ch.isTextBased() : (ch.type === 0 || ch.type === 2);
+                    if (isText && this.checkChannelPermissions(ch, options).ok) {
                         return ch;
                     }
                 }
+            } catch (fallbackErr) {
+                logger.debug(`Idle guild text channel fallback error for guild ${guildId}:`, fallbackErr?.message || fallbackErr);
             }
-        } catch (fallbackErr) {
-            logger.debug(`Idle guild text channel fallback error for guild ${guildId}:`, fallbackErr?.message || fallbackErr);
         }
 
-        logger.debug(`No valid destination channel found for guild ${guildId} (idle/disconnected)`);
+        logger.warn(`[DASHBOARD-DIAG] No usable channel found for guild ${guildId}.`);
         return null;
     }
 

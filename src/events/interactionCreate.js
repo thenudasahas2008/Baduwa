@@ -21,7 +21,7 @@ async function handlePlayerInteraction(interaction, action, args = []) {
     const guildId = interaction.guildId || interaction.guild?.id;
     if (!guildId) {
         return safeReply(interaction, {
-            content: 'Music controls can only be used in a Discord server voice channel.',
+            content: 'Music controls can only be used in a Discord server.',
             flags: MessageFlags.Ephemeral
         });
     }
@@ -640,7 +640,7 @@ module.exports = {
                 const interactionGuildId = interaction.guildId || interaction.guild?.id;
                 if (!interactionGuildId && !isFastCommand && commandName !== 'faulty') {
                     return await safeReply(interaction, {
-                        content: 'Music commands can only be used in a Discord server voice channel.',
+                        content: 'Music commands can only be used in a Discord server.',
                         flags: MessageFlags.Ephemeral
                     });
                 }

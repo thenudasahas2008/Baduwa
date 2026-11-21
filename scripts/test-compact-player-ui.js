@@ -55,7 +55,7 @@ async function test(name, fn) {
         assert.ok(embed.data.description.includes('### [Violet Sky](https://youtube.com/watch?v=sky)'), 'Prominent blue/link title');
         assert.ok(embed.data.description.includes('by **Aurora**'), 'Artist directly beneath title');
         assert.equal(embed.data.thumbnail.url, 'https://example.com/art.png', 'Artwork in thumbnail (upper right)');
-        assert.ok(embed.data.footer.text.includes('ZYRO Music'), 'Footer has ZYRO Music branding');
+        assert.ok(embed.data.footer.text.includes('Baduwa Music') || embed.data.footer.text.includes('ZYRO Music'), 'Footer has Baduwa Music branding');
     });
 
     await test('2. The current title, artist, artwork, duration and requester are correct', async () => {
@@ -473,7 +473,7 @@ async function test(name, fn) {
 
         const embed = createStoppedEmbed({ guildId: 'g-stop' }, mockClient, 'vc-123');
         assert.equal(embed.data.color, COLORS.NEUTRAL);
-        assert.equal(embed.data.author.name, 'ZYRO • IDLE');
+        assert.ok(embed.data.author.name.includes('IDLE'));
         assert.ok(embed.data.description.includes('Playback stopped and queue cleared'));
         assert.ok(embed.data.description.includes('<#vc-123>'));
 

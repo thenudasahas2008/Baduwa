@@ -124,7 +124,7 @@ module.exports = {
         if (!guildId) {
             logStage('FINAL_RESPONSE_START', 'START', 'reason=DM_NOT_ALLOWED');
             const resp = await safeReply(interaction, {
-                content: 'This command can only be used in a Discord server voice channel.',
+                content: 'This command can only be used in a Discord server.',
                 flags: MessageFlags.Ephemeral
             });
             logStage('FINAL_RESPONSE_COMPLETED', resp ? 'SUCCESS' : 'FAILED', 'reason=DM_NOT_ALLOWED');

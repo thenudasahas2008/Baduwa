@@ -109,7 +109,7 @@ module.exports = {
                 player = client.lavalink.createPlayer({
                     guildId,
                     voiceChannelId: voiceChannel.id,
-                    textChannelId: voiceChannel.id,
+                    textChannelId: interaction.channel?.id || voiceChannel.id,
                     selfDeaf: true,
                     selfMute: false,
                     volume: getValidVolume(process.env.DEFAULT_VOLUME, 80),
@@ -121,11 +121,14 @@ module.exports = {
                     embeds: [createActionEmbed('warning', 'Different Voice Channel', 'You need to be in the same voice channel as Baduwa to search.')],
                     flags: MessageFlags.Ephemeral
                 });
-            } else if (activeNode && activeNode.connected && (!player.node || !player.node.connected)) {
-                if (typeof player.changeNode === 'function') {
-                    await player.changeNode(activeNode, false).catch(() => { player.node = activeNode; });
-                } else {
-                    player.node = activeNode;
+            } else {
+                player.textChannelId = interaction.channel?.id || voiceChannel.id;
+                if (activeNode && activeNode.connected && (!player.node || !player.node.connected)) {
+                    if (typeof player.changeNode === 'function') {
+                        await player.changeNode(activeNode, false).catch(() => { player.node = activeNode; });
+                    } else {
+                        player.node = activeNode;
+                    }
                 }
             }
 

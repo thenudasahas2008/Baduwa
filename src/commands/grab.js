@@ -1,6 +1,6 @@
 const { SlashCommandBuilder, EmbedBuilder, MessageFlags } = require('discord.js');
 const { ensureDeferred, requirePlayer, safeReply } = require('../utils/interactionHelpers');
-const { createActionEmbed, formatDuration, ZYRO_COLORS } = require('../utils/zyroEmbeds');
+const { createActionEmbed, formatDuration, COLORS } = require('../utils/zyroEmbeds');
 const logger = require('../utils/logger');
 
 module.exports = {
@@ -29,7 +29,7 @@ module.exports = {
             const artwork = current.info?.artworkUrl || null;
 
             const dmEmbed = new EmbedBuilder()
-                .setColor(ZYRO_COLORS.PRIMARY)
+                .setColor(COLORS.PRIMARY)
                 .setTitle('🎵 Saved Track from Baduwa')
                 .setDescription(`[**${title}**](${uri})\nby **${author}**`)
                 .addFields([

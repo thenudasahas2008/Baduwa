@@ -287,7 +287,7 @@ function paginatedQueue(player, page = 1, itemsPerPage = 9) {
     };
 }
 
-const { ZYRO_COLORS, formatDuration, createActionEmbed } = require('./zyroEmbeds');
+const { COLORS, formatDuration, createActionEmbed } = require('./zyroEmbeds');
 
 function createPaginatedQueueResponse(client, player, page = 1) {
     const totalTracks = player.queue.tracks.length;
@@ -337,8 +337,8 @@ function createPaginatedQueueResponse(client, player, page = 1) {
     }
 
     const embed = new EmbedBuilder()
-        .setColor(ZYRO_COLORS.PRIMARY)
-        .setTitle(`ZYRO • Queue (${totalTracks} track${totalTracks === 1 ? '' : 's'})`)
+        .setColor(COLORS.PRIMARY)
+        .setTitle(`Baduwa • Queue (${totalTracks} track${totalTracks === 1 ? '' : 's'})`)
         .setDescription(description.length > 4000 ? description.substring(0, 4000) + '\n...' : description)
         .setFooter({
             text: `Page ${pageData.currentPage} of ${pageData.totalPages} • Total Duration: ${formatDuration(totalDuration)}`

@@ -19,7 +19,7 @@ async function fetchLyrics(title, artist, durationSec) {
         if (durationSec) params.set('duration', String(Math.round(durationSec)));
 
         const response = await fetch(`https://lrclib.net/api/get?${params}`, {
-            headers: { 'User-Agent': `ZYRO/${version}` },
+            headers: { 'User-Agent': `Baduwa/${version}` },
             signal: controller.signal,
         });
 
@@ -34,7 +34,7 @@ async function fetchLyrics(title, artist, durationSec) {
         const searchResponse = await fetch(
             `https://lrclib.net/api/search?q=${encodeURIComponent(`${title} ${artist}`)}`,
             {
-                headers: { 'User-Agent': `ZYRO/${version}` },
+                headers: { 'User-Agent': `Baduwa/${version}` },
                 signal: controller.signal,
             }
         );

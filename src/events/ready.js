@@ -6,7 +6,7 @@ const logger = require('../utils/logger');
 const { INTENDED_BOT_USERNAME } = require('../utils/branding');
 
 /**
- * Synchronizes the Discord bot username with the authoritative identity constant ("ZYRO ♪").
+ * Synchronizes the Discord bot username with the authoritative identity constant ("Baduwa").
  * Avoids redundant Discord API calls if the username already matches.
  * Handles rate limits (Discord allows only 2 username updates per hour) and errors gracefully without crashing.
  *
@@ -177,7 +177,7 @@ module.exports = {
         // Verify and synchronize bot username identity
         await syncBotUsername(client);
 
-        // Safely migrate existing welcome messages to ZYRO branding
+        // Safely migrate existing welcome messages to Baduwa branding
         try {
             const { migrateAllWelcomeMessages } = require('../utils/welcomeManager');
             migrateAllWelcomeMessages(client).catch((err) => {

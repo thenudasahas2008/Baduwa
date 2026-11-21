@@ -5,7 +5,7 @@ const { getPlaybackPosition } = require('./seekManager');
 const { INTENDED_BOT_USERNAME } = require('./branding');
 
 const COLORS = {
-    PRIMARY: 0x7C3AED, // Electric Violet (ZYRO signature)
+    PRIMARY: 0x7C3AED, // Electric Violet (Baduwa signature)
     CYAN: 0x06B6D4,    // Cyan accent
     SECONDARY: 0x06B6D4,// Cyan accent alias
     SUCCESS: 0x10B981, // Emerald green
@@ -268,7 +268,7 @@ function createNowPlayingEmbed(player, track, client) {
 
     const botDisplayName = client?.user?.username
         ? client.user.username.replace(/[^\w\s]/g, '').trim() || 'Baduwa'
-        : (client?.brandingName || 'ZYRO');
+        : (client?.brandingName || 'Baduwa');
     const botUpper = botDisplayName.toUpperCase();
     const authorText = isPaused ? `⏸️ ${botUpper} • PAUSED` : `🎵 ${botUpper} • NOW PLAYING`;
     const embed = new EmbedBuilder()
@@ -300,7 +300,7 @@ function createStoppedEmbed(player, client, voiceChannelId) {
     const channelMention = channelId ? `<#${channelId}>` : 'voice channel';
     const botDisplayName = client?.user?.username
         ? client.user.username.replace(/[^\w\s]/g, '').trim() || 'Baduwa'
-        : (client?.brandingName || 'ZYRO');
+        : (client?.brandingName || 'Baduwa');
     const botUpper = botDisplayName.toUpperCase();
 
     return new EmbedBuilder()
@@ -318,7 +318,7 @@ function createUnavailableEmbed(player, client) {
     const is247 = client?.is247Enabled ? client.is247Enabled(player?.guildId) : false;
     const botDisplayName = client?.user?.username
         ? client.user.username.replace(/[^\w\s]/g, '').trim() || 'Baduwa'
-        : (client?.brandingName || 'ZYRO');
+        : (client?.brandingName || 'Baduwa');
     const botUpper = botDisplayName.toUpperCase();
 
     return new EmbedBuilder()
@@ -331,6 +331,7 @@ function createUnavailableEmbed(player, client) {
 
 module.exports = {
     COLORS,
+    BADUWA_COLORS: COLORS,
     ZYRO_COLORS: COLORS,
     ICONS,
     formatDuration,

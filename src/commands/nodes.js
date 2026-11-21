@@ -1,6 +1,6 @@
 const { SlashCommandBuilder, EmbedBuilder, MessageFlags } = require('discord.js');
 const { ensureDeferred, safeReply } = require('../utils/interactionHelpers');
-const { ZYRO_COLORS } = require('../utils/zyroEmbeds');
+const { COLORS } = require('../utils/zyroEmbeds');
 const logger = require('../utils/logger');
 
 function formatBytes(bytes) {
@@ -45,7 +45,7 @@ module.exports = {
             }
 
             const embed = new EmbedBuilder()
-                .setColor(ZYRO_COLORS.PRIMARY)
+                .setColor(COLORS.PRIMARY)
                 .setTitle(`📡 Lavalink Node Telemetry (${nodes.length} registered)`)
                 .setDescription('Real-time audio node status, connection health, and resource utilization.')
                 .setTimestamp();

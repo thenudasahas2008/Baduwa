@@ -56,9 +56,9 @@ async function runTests() {
         const embed = buildWelcomeEmbed(mockClient);
         const data = embed.data || embed;
 
-        assert.equal(data.title, 'Thanks for adding ZYRO!', 'Embed title must match exactly');
-        assert.equal(data.description, 'ZYRO is ready to play music! Use /play to get started, or /about to learn more.', 'Embed description must match exactly');
-        assert.equal(data.footer?.text, 'ZYRO Music', 'Embed footer must be ZYRO Music');
+        assert.equal(data.title, 'Thanks for adding Baduwa!', 'Embed title must match exactly');
+        assert.equal(data.description, 'Baduwa is ready to play music! Use /play to get started, or /about to learn more.', 'Embed description must match exactly');
+        assert.equal(data.footer?.text, 'Baduwa Music', 'Embed footer must be Baduwa Music');
         assert.equal(data.color, ZYRO_PURPLE, 'Embed color must be signature violet');
         assert.equal(data.thumbnail?.url, 'https://cdn.discordapp.com/avatars/bot-zyro-123/avatar.png');
     });
@@ -241,9 +241,9 @@ async function runTests() {
         // Check edited payload
         assert.ok(editedPayload, 'oldMessage.edit() must be called in place');
         const editedEmbed = editedPayload.embeds[0].data || editedPayload.embeds[0];
-        assert.equal(editedEmbed.title, 'Thanks for adding ZYRO!');
-        assert.equal(editedEmbed.description, 'ZYRO is ready to play music! Use /play to get started, or /about to learn more.');
-        assert.equal(editedEmbed.footer.text, 'ZYRO Music');
+        assert.equal(editedEmbed.title, 'Thanks for adding Baduwa!');
+        assert.equal(editedEmbed.description, 'Baduwa is ready to play music! Use /play to get started, or /about to learn more.');
+        assert.equal(editedEmbed.footer.text, 'Baduwa Music');
 
         const editedBtn = editedPayload.components[0].components[0].data || editedPayload.components[0].components[0];
         assert.equal(editedBtn.label, 'GitHub');
@@ -262,9 +262,9 @@ async function runTests() {
     console.log('\nTesting Slash Commands and Locale Branding Consistency...');
 
     // 6. /about command branding and GitHub link
-    check('/about command uses ZYRO branding and opens user GitHub profile with "GitHub Profile" button', async () => {
+    check('/about command uses Baduwa branding and opens user GitHub profile with "GitHub Profile" button', async () => {
         const aboutCmd = require('../src/commands/about');
-        assert.ok(aboutCmd.data.description.includes('ZYRO'));
+        assert.ok(aboutCmd.data.description.includes('Baduwa'));
 
         let editedPayload = null;
         const mockInteraction = {
@@ -288,7 +288,7 @@ async function runTests() {
         await aboutCmd.execute(mockInteraction);
         assert.ok(editedPayload, 'Must reply to /about interaction');
         const embed = editedPayload.embeds[0];
-        assert.ok(embed.data.title.includes('ZYRO'));
+        assert.ok(embed.data.title.includes('Baduwa'));
 
         const rows = editedPayload.components;
         const buttons = rows.flatMap(r => r.components);
@@ -354,19 +354,19 @@ async function runTests() {
     });
 
     // 7. /invite command branding
-    check('/invite command description references ZYRO', () => {
+    check('/invite command description references Baduwa', () => {
         const inviteCmd = require('../src/commands/invite');
-        assert.ok(inviteCmd.data.description.includes('ZYRO'));
+        assert.ok(inviteCmd.data.description.includes('Baduwa'));
         assert.ok(!inviteCmd.data.description.includes('BeatDock'));
     });
 
     // 8. Locales consistency
-    check('locales/en.json contains updated ZYRO welcome and about titles', () => {
+    check('locales/en.json contains updated Baduwa welcome and about titles', () => {
         const en = require('../locales/en.json');
-        assert.equal(en.WELCOME_TITLE, 'Thanks for adding ZYRO!');
-        assert.equal(en.WELCOME_DESCRIPTION, 'ZYRO is ready to play music! Use `/play` to get started, or `/about` to learn more.');
-        assert.equal(en.ABOUT_TITLE, 'About ZYRO');
-        assert.equal(en.INVITE_TITLE, 'Invite ZYRO');
+        assert.equal(en.WELCOME_TITLE, 'Thanks for adding Baduwa!');
+        assert.equal(en.WELCOME_DESCRIPTION, 'Baduwa is ready to play music! Use `/play` to get started, or `/about` to learn more.');
+        assert.equal(en.ABOUT_TITLE, 'About Baduwa');
+        assert.equal(en.INVITE_TITLE, 'Invite Baduwa');
     });
 
     console.log('\nTesting ZYRO Activity Rotation Manager...');

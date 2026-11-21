@@ -399,7 +399,7 @@ class PublicNodeProvider {
                 headers: {
                     'Authorization': password,
                     'Accept': 'application/json',
-                    'User-Agent': 'ZYRO-Audio-Compatibility/1.0',
+                    'User-Agent': 'Baduwa-Audio-Compatibility/1.0',
                 },
                 signal: controller.signal,
             });

@@ -12,9 +12,9 @@ const { INTENDED_BOT_USERNAME, ZYRO_PURPLE, GITHUB_PROFILE_URL } = require('./br
 function buildWelcomeEmbed(client) {
     const embed = new EmbedBuilder()
         .setColor(ZYRO_PURPLE)
-        .setTitle('Thanks for adding ZYRO!')
-        .setDescription('ZYRO is ready to play music! Use /play to get started, or /about to learn more.')
-        .setFooter({ text: 'ZYRO Music' });
+        .setTitle('Thanks for adding Baduwa!')
+        .setDescription('Baduwa is ready to play music! Use /play to get started, or /about to learn more.')
+        .setFooter({ text: 'Baduwa Music' });
 
     if (client?.user?.displayAvatarURL) {
         embed.setThumbnail(client.user.displayAvatarURL());
@@ -221,7 +221,7 @@ function isExistingZyroWelcomeMessage(message, botId) {
     for (const embed of embeds) {
         const raw = embed.data || embed;
         const title = raw.title || '';
-        if (title.includes('Thanks for adding ZYRO!')) {
+        if (title.includes('Thanks for adding ZYRO!') || title.includes('Thanks for adding Baduwa!')) {
             return true;
         }
     }
